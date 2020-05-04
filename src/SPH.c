@@ -167,8 +167,9 @@ void update_positions_project(Grid* grid, Particle** particles, Particle_derivat
 	for (int i = 0; i < n_p_domain; i++) {
 	    ind = index_part_in_domain[i];
 	    time_integrate(particles[ind], residuals[ind], setup->timestep);
-	    if (particles[ind]->pos->x < 0.0 || particles[ind]->pos->x > 1.0 || particles[ind]->pos->y < 0.0 || particles[ind]->pos->y > 1.0)
-	      printf("!!! Part #%d at (x,y) = (%2.6f, %2.6f) outside the domain !!!\n", i, particles[ind]->pos->x, particles[ind]->pos->y);
+// 	    if (particles[ind]->pos->x < 0.0 || particles[ind]->pos->x > 1.0 || particles[ind]->pos->y < 0.0 || particles[ind]->pos->y > 1.0)
+// 	    if (particles[ind]->pos->x != particles[ind]->pos->x)
+// 	      printf("!!! Part #%d at (x,y) = (%2.6f, %2.6f) outside the domain !!!\n", i, particles[ind]->pos->x, particles[ind]->pos->y);
 // 	    if (norm(particles[ind]->v) > 0.0)
 // 	      printf("part #%d: pos (%2.3f, %2.3f), vel (%2.8f, %2.8f) \n", ind, particles[ind]->pos->x, particles[ind]->pos->y, particles[ind]->v->x, particles[ind]->v->y);
 	}
@@ -204,21 +205,27 @@ void apply_BC_Adami(Boundary* boundary, Kernel kernel, double kh) {
 		node = node->next;
 	}
 	
-	 // Velocity
-	 boundary->part_on_bound[i_p]->v->x = 2.0*boundary->v_imposed->x - v_a_tilde->x / denom; // Eq. 23 in Adami 2012
-	 boundary->part_on_bound[i_p]->v->y = 2.0*boundary->v_imposed->y - v_a_tilde->y / denom; // Eq. 23 in Adami 2012
-	 // Pressure 
-	 boundary->part_on_bound[i_p]->P = p_w / denom; // Eq. 27 in Adami 2012
-	 // Density
-	 double rho_0 = boundary->part_on_bound[i_p]->param->rho_0;
-	 double gamma = boundary->part_on_bound[i_p]->param->gamma;
-	 double c = boundary->part_on_bound[i_p]->param->sound_speed;
-	 double background_p = boundary->part_on_bound[i_p]->param->background_p;
-	 double p_0 = squared(c) * rho_0 / gamma;
-	 boundary->part_on_bound[i_p]->rho = rho_0 * pow(((p_w-background_p)/p_0)+1.0, 1.0/gamma); // Eq. 28 in Adami 2012
-	 
-// 	 if (norm(boundary->part_on_bound[i_p]->v) > 0.0)
-// 	      printf("Boundary part #%d: pos (%2.3f, %2.3f), vel (%2.8f, %2.8f) \n", i_p, boundary->part_on_bound[i_p]->pos->x, boundary->part_on_bound[i_p]->pos->y, boundary->part_on_bound[i_p]->v->x, boundary->part_on_bound[i_p]->v->y);
+	// calculation is done only for the relevant boundary particles.
+        // denom (and v_a_tilde, p_w) is 0 for particles sufficiently away from the
+        // solid-fluid interface
+	if (denom > 1e-12) {
+	  v_a_tilde->x /= denom;
+	  v_a_tilde->y /= denom;
+	  p_w /= denom;
+	}
+	// Velocity
+	boundary->part_on_bound[i_p]->v->x = 2.0*boundary->v_imposed->x - v_a_tilde->x; // Eq. 23 in Adami 2012
+	boundary->part_on_bound[i_p]->v->y = 2.0*boundary->v_imposed->y - v_a_tilde->y; // Eq. 23 in Adami 2012
+	// Pressure 
+	boundary->part_on_bound[i_p]->P = p_w; // Eq. 27 in Adami 2012
+	// Density
+	double rho_0 = boundary->part_on_bound[i_p]->param->rho_0;
+	double gamma = boundary->part_on_bound[i_p]->param->gamma;
+	double c = boundary->part_on_bound[i_p]->param->sound_speed;
+	double background_p = boundary->part_on_bound[i_p]->param->background_p;
+	double p_0 = squared(c) * rho_0 / gamma;
+	boundary->part_on_bound[i_p]->rho = rho_0 * pow(((p_w-background_p)/p_0)+1.0, 1.0/gamma); // Eq. 28 in Adami 2012
+	
       }
 }
 
@@ -314,6 +321,10 @@ void assemble_residual_NS(Particle* particle, Particle_derivatives* particle_der
 	residual->mass_eq = -rho_i * div_vel_i;
 	residual->momentum_x_eq = (-1.0/rho_i) * grad_P->x + (mu_i/rho_i) * lapl_v->x + fs_x;
 	residual->momentum_y_eq = (-1.0/rho_i) * grad_P->y + (mu_i/rho_i) * lapl_v->y + fs_y;
+// 	if(lapl_v->x != lapl_v->x || lapl_v->y != lapl_v->y)
+// 	  printf("!!! Part #%d with (lapl_v_x, lapl_v_y) = (%2.6f, %2.6f) !!!\n", particle->index, lapl_v->x, lapl_v->y);
+// 	if(grad_P->x != grad_P->x || grad_P->y != grad_P->y)
+// 	  printf("!!! Part #%d with (gradP_x, gradP_y) = (%2.6f, %2.6f) !!!\n", particle->index, grad_P->x, grad_P->y);
 
 }
 
@@ -322,18 +333,18 @@ void assemble_residual_NS(Particle* particle, Particle_derivatives* particle_der
 // Time integrate the Navier-Stokes equations based on the residual already assembled
 void time_integrate(Particle* particle, Residual* residual, double delta_t) {
 
-	// Update position with an Euler explicit scheme
-	particle->pos->x += delta_t * particle->v->x - delta_t * particle->XSPH_correction->x;
-	particle->pos->y += delta_t * particle->v->y - delta_t * particle->XSPH_correction->y;
+// 	// Update position with an Euler explicit scheme
+// 	particle->pos->x += delta_t * particle->v->x - delta_t * particle->XSPH_correction->x;
+// 	particle->pos->y += delta_t * particle->v->y - delta_t * particle->XSPH_correction->y;
 
 	// Update density and velocity with an Euler explicit scheme (TODO: implement more accurate and more stable schemes)
 	particle->rho += delta_t * residual->mass_eq;
 	particle->v->x += delta_t * residual->momentum_x_eq;
 	particle->v->y += delta_t * residual->momentum_y_eq;
 	
-// 	// Update position with an Euler explicit scheme // WARNING: before (explicit) or after (implicit) the updates of the field variables?
-// 	particle->pos->x += delta_t * particle->v->x - delta_t * particle->XSPH_correction->x;
-// 	particle->pos->y += delta_t * particle->v->y - delta_t * particle->XSPH_correction->y;
+	// Update position with an Euler explicit scheme // WARNING: before (explicit) or after (implicit) the updates of the field variables?
+	particle->pos->x += delta_t * particle->v->x - delta_t * particle->XSPH_correction->x;
+	particle->pos->y += delta_t * particle->v->y - delta_t * particle->XSPH_correction->y;
 
 	// Update pressure with Tait's equation of state
 	double B = squared(particle->param->sound_speed) * particle->param->rho_0 / particle->param->gamma;
@@ -505,3 +516,4 @@ double compute_admissible_dt(double safety_param, double h_p, double c_0, double
   return safety_param * fmin(dt_min_interm, dt_4);
 
 }
+

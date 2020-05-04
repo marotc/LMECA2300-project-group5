@@ -411,11 +411,11 @@ void script_lid_driven_cavity() {
 	
 	// Physical parameters
 	double speed_upper_boundary = 1.0;
-	double Re = 100.0;
-	double rho_0 = 1.0; // initial (physical) density of water at 20°C (in kg/m^3)
+	double Re = 400.0;
+	double rho_0 = 1.0; 
 	double mu = (rho_0*speed_upper_boundary*L_x) / Re;
 	double gamma = 7.0; // typical value for liquid (dimensionless)
-	double c_0 = 10.0*speed_upper_boundary;//5.0;//1481; // sound speed in water at 20°C (in m/s)
+	double c_0 = 100.0*speed_upper_boundary;
 	double background_pressure = 0.0;
 	xy* gravity = xy_new(0.0, 0.0);
 	
@@ -428,8 +428,8 @@ void script_lid_driven_cavity() {
 	// -------- NUMBER OF PARTICLES AND SIZE --------
 	
 	// 1/ *** In the domain ***
-	int N_x = 25;
-	int N_y = 25;
+	int N_x = 40;
+	int N_y = 40;
 	double h_x = L_x / ((double)N_x - 1.0);
 	double h_y = L_y / ((double)N_y - 1.0);
 	int N_x_corrected = N_x - 2; // remove particles on horizontal boundaries
@@ -442,7 +442,7 @@ void script_lid_driven_cavity() {
 	
 	// 2/ *** On the boundaries ****
 	int nb_boundaries = 4;
-	int nb_rows_per_bound = 3; // WARNING: we should add a number of rows such that the kernel of a particle next to a boundary will not be truncated
+	int nb_rows_per_bound = 5; // WARNING: we should add a number of rows such that the kernel of a particle next to a boundary will not be truncated
 	Boundary** boundaries  = (Boundary**)malloc(nb_boundaries * sizeof(Boundary*));
 	// Coordinates of the corners
 	xy* pos_corner_down_left = xy_new(0.0, 0.0);
@@ -600,3 +600,4 @@ void script2() {
 	Grid_free(grid);
 	Animation_free(animation);
 }
+
