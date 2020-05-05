@@ -150,11 +150,12 @@ void update_positions_project(Grid* grid, Particle** particles, Particle_derivat
 	        ind = index_part_in_domain[i];
 		if (setup->XSPH_epsilon != 0.0) compute_XSPH_correction(particles[ind], setup->kernel, setup->kh,setup->XSPH_epsilon);
 		particles_derivatives[ind]->div_v = compute_div(particles[ind], Particle_get_v, setup->kernel, setup->kh);
-		particles_derivatives[ind]->lapl_v->x = compute_lapl(particles[ind], Particle_get_v_x, setup->kernel, setup->kh);
-		particles_derivatives[ind]->lapl_v->y = compute_lapl(particles[ind], Particle_get_v_y, setup->kernel, setup->kh);
-		compute_grad(particles[ind], Particle_get_P, setup->kernel, setup->kh, particles_derivatives[ind]->grad_P);
-// 		compute_grad(particles[ind], Particle_get_Cs, setup->kernel, setup->kh, particles_derivatives[ind]->grad_Cs);
-// 		particles_derivatives[ind]->lapl_Cs = compute_lapl(particles[ind], Particle_get_Cs, setup->kernel, setup->kh);
+// 		particles_derivatives[ind]->lapl_v->x = compute_lapl(particles[ind], Particle_get_v_x, setup->kernel, setup->kh);
+// 		particles_derivatives[ind]->lapl_v->y = compute_lapl(particles[ind], Particle_get_v_y, setup->kernel, setup->kh);
+// 		compute_grad(particles[ind], Particle_get_P, setup->kernel, setup->kh, particles_derivatives[ind]->grad_P);
+		particles_derivatives[ind]->lapl_v->x = compute_lapl_Adami(particles[ind], Particle_get_v_x, setup->kernel, setup->kh);
+		particles_derivatives[ind]->lapl_v->y = compute_lapl_Adami(particles[ind], Particle_get_v_y, setup->kernel, setup->kh);
+		compute_grad_Adami(particles[ind], Particle_get_P, setup->kernel, setup->kh, particles_derivatives[ind]->grad_P);
 	}
 
 	// Assemble residual based on the computed derivatives of the bulk particles
@@ -516,4 +517,3 @@ double compute_admissible_dt(double safety_param, double h_p, double c_0, double
   return safety_param * fmin(dt_min_interm, dt_4);
 
 }
-

@@ -428,11 +428,11 @@ void script_lid_driven_cavity() {
 	// -------- NUMBER OF PARTICLES AND SIZE --------
 	
 	// 1/ *** In the domain ***
-	int N_x = 40;
-	int N_y = 40;
+	int N_x = 25;
+	int N_y = 25;
 	double h_x = L_x / ((double)N_x - 1.0);
 	double h_y = L_y / ((double)N_y - 1.0);
-	int N_x_corrected = N_x - 2; // remove particles on horizontal boundaries
+	int N_x_corrected = N_x- 2; // remove particles on horizontal boundaries
 	int N_y_corrected = N_y - 2; // remove particles on vertical boundaries
 	int total_nb_part_in_domain = N_x_corrected*N_y_corrected;
 
@@ -600,4 +600,3 @@ void script2() {
 	Grid_free(grid);
 	Animation_free(animation);
 }
-

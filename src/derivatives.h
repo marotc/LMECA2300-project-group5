@@ -12,4 +12,6 @@ double compute_div(Particle * particle, xy_getter get, Kernel kernel, double kh)
 void compute_grad(Particle * particle, scalar_getter get, Kernel kernel, double kh, xy* grad);
 double compute_lapl(Particle *particle, scalar_getter get, Kernel kernel, double kh);
 
+void compute_grad_Adami(Particle * particle, scalar_getter get, Kernel kernel, double kh, xy* grad);
+double compute_lapl_Adami(Particle *particle, scalar_getter get, Kernel kernel, double kh);
 #endif
