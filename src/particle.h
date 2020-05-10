@@ -5,17 +5,16 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdbool.h>
-
+#include <omp.h>
 #include "utils.h"
 
-typedef struct Cell Cell;
-typedef struct Grid Grid;
 typedef struct Particle Particle;
 typedef struct Particle_derivatives Particle_derivatives;
 typedef struct Physical_parameters Physical_parameters;
-typedef struct Verlet Verlet;
+typedef struct Cell Cell;
+typedef struct Grid Grid;
+typedef struct Search Search;
 typedef struct Boundary Boundary;
-
 
 struct Cell {
 	int i,j;
@@ -58,7 +57,7 @@ struct Particle {
 
 	xy* XSPH_correction; // Correction on the velocity field when updating the position of the particles	
 	bool on_free_surface; // boolean to know if particles is on the free surface (used for visualization)
-	
+	bool on_boundary; // boolean to know if particles is on the boundary
 	Physical_parameters* param; // physical parameters associated to the particle
 
 	Cell* cell;    // cell that the particle belongs to
@@ -75,7 +74,7 @@ struct Particle_derivatives {
 	double lapl_Cs;
 };
 
-struct Verlet {
+struct Search {
 	bool verlet;
 	double kh;
 	double L;
@@ -83,9 +82,7 @@ struct Verlet {
 };
 
 struct Boundary {
-        int nb_part_on_bound;
-	int nb_part_in_domain;
-	int nb_boundaries;
+    int nb_part_on_bound;
 	Particle** part_on_bound;
 	xy* v_imposed;
 	xy* acc_imposed;    
@@ -98,7 +95,7 @@ Grid* Grid_new(double x1, double x2, double y1, double y2, double kh); // Grid c
 void Grid_free(Grid* grid); // Grid destructor
 
 // Particle
-Particle* Particle_new(int index, double m, xy* pos, xy* v, double rho_0, double mu, double c_0, double gamma, double sigma, double background_p, xy* gravity); // Particle constructor
+Particle* Particle_new(int index, double m, xy* pos, xy* v, double rho_0, double mu, double c_0, double gamma, double sigma, double background_p, xy* gravity,bool on_boundary); // Particle constructor
 void Particle_free(Particle* particle);
 void free_particles(Particle** particles, int N);
 
@@ -116,31 +113,32 @@ void Particle_derivatives_free(Particle_derivatives* particle_derivatives);
 void Particle_derivatives_reset(Particle_derivatives *particle_derivatives);
 void free_particles_derivatives(Particle_derivatives** particles_derivatives, int N);
 
-Verlet* Verlet_new(double kh, double L, int T);
+Search* Search_new(bool verlet, double kh, double L, int T);
+void Search_free(Search* search);
 
 // Update of the particles' locations in cells
 Cell* localize_particle(Grid* grid, Particle * p);
 void update_cells(Grid* grid, Particle** particles, int N);
 
 // Update of the neighborhood
+void reset_grid(Grid* grid);
+void reset_particles(Particle** particles, int N, int iter, Search* search);
 void add_neighbors_from_cell(Particle* p, Cell* cell, double r);
 void add_neighbors_from_cells(Grid* grid, Particle* p);
-void update_from_potential_neighbors(Particle** particles, int N, double r);
-void update_neighborhoods(Grid* grid, Particle** particles, int N, int iter, Verlet* verlet);
-
-// Improved update of the neighborhood
-void update_neighborhoods_improved(Grid* grid);
+void update_neighborhoods_particles(Grid* grid, Particle** particles, int N, Search* search);
+void update_from_potential_neighbors(Particle** particles, int N, Search* search);
+void update_neighborhoods(Grid* grid, Particle** particles, int N, int iter, Search* search);
 
 // Build random particles
 Particle** build_particles(int N, double L);
 
-void reset_grid(Grid* grid);
-void reset_particles(Particle** particles, int N, int iter, Verlet* verlet);
-
 // Boundary
-Boundary* Boundary_new(int index_b, int nb_b, xy** coord, Particle** part, int index_start_boundary, int nb_part_per_bound, int nb_rows_per_bound, double m, 
-		       double rho_0, double mu, double c_0, double gamma, double background_p, xy* gravity, xy* vel_BC, xy* acc_BC, int nb_part_in_domain);
+Boundary* Boundary_new(int index_start_boundary, xy** pos, Particle** part, int nb_part_per_bound, xy* vel_BC, xy* acc_BC,
+double m, double rho_0, double mu, double c_0, double gamma, double background_p, xy* gravity);
 void Boundary_free(Boundary* boundary);
 void free_boundaries(Boundary** boundaries, int N);
+
+Boundary* build_rectangular_boundaries(xy** coord, Particle** part, int index_start_boundary, int nb_part_per_bound_x, int nb_part_per_bound_y, int nb_part_first_row_x, int nb_part_first_row_y, int nb_rows_per_bound, xy** vel_BC, xy** acc_BC, double h_x, double h_y,
+	double m, double rho_0, double mu, double c_0, double gamma, double background_p, xy* gravity);
 
 #endif

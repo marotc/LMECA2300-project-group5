@@ -21,17 +21,17 @@ void fillData(GLfloat(*data)[8], Particle** particles, int N) {
 		data[i][1] = p->pos->y;
 		data[i][2] = p->v->x;
 		data[i][3] = p->v->y;
-		// colormap_cell(p, &data[i][4]); // fill color
-// 		colormap_Cs(p, &data[i][4]); // fill color
-// 		colormap_pressure(p, &data[i][4], max_pressure);
-		colormap_velocity(p, &data[i][4], max_norm_vel);
-// 		if (p->on_free_surface) {
-// 		  colormap_uni_color_2(&data[i][4]);
-// // 		  colormap_fs(p, &data[i][4], max_norm_fs);
-// 		}
-// 		else {
-// 		  colormap_uni_color(&data[i][4]);
-// 		}
+		//colormap_cell(p, &data[i][4]); // fill color
+		//colormap_Cs(p, &data[i][4]); // fill color
+		//colormap_pressure(p, &data[i][4], max_pressure);
+		//colormap_velocity(p, &data[i][4], max_norm_vel);
+ 		if (p->on_boundary) {
+ 		  colormap_uni_color_2(&data[i][4]);
+		  //colormap_fs(p, &data[i][4], max_norm_fs);
+ 		}
+ 		else {
+ 		  colormap_uni_color(&data[i][4]);
+ 		}
 		
 		data[i][7] = 0.8f; // transparency
 	}
@@ -40,7 +40,6 @@ void fillData(GLfloat(*data)[8], Particle** particles, int N) {
 bov_points_t * load_Grid(Grid* grid,double scale)
 {
 	int nLines = (grid->nCellx + 1) + (grid->nCelly + 1);
-	printf("\n%d\n", nLines);
 	GLfloat(*data)[2] = malloc(sizeof(data[0]) * 2 * nLines);
 	for (int i = 0;i < (grid->nCellx + 1);i++)
 	{
@@ -60,7 +59,7 @@ bov_points_t * load_Grid(Grid* grid,double scale)
 	bov_points_t *points = bov_points_new(data, 2 * nLines, GL_STATIC_DRAW);
 	bov_points_set_width(points, 0.005);
 	double L = grid->h*grid->nCellx;
-	bov_points_scale(points, (GLfloat[2]){0.8/L*scale, 0.8/L*scale});
+	bov_points_scale(points, (GLfloat[2]){(0.8/L)*scale, (0.8/L)*scale});
 	//bov_points_scale(points, (GLfloat[2]) { 0.008, 0.008 });
 	free(data);
 	return points;
@@ -84,8 +83,8 @@ Animation* Animation_new(int N, double timeout,Grid* grid,double scale)
 	bov_points_set_width(particles, 0.01);
 	bov_points_set_outline_width(particles, 0.0025);
 	
-	double c = 4;
-	bov_points_scale(particles, (GLfloat[2]){0.4*c/L*scale, 0.4*c/L*scale});//0.8
+	double c = 3;
+	bov_points_scale(particles, (GLfloat[2]){(0.8/L)*(scale*c), (0.8/L)*(scale*c)});//0.8
 	//bov_points_scale(particles, (GLfloat[2]){ 0.008, 0.008 });
 	animation->particles = particles;
 	////set-up grid////
@@ -109,7 +108,7 @@ void display_particles(Particle** particles, Animation* animation,bool end, int 
 	int N = animation->N;
 	GLfloat(*data)[8] = malloc(sizeof(data[0])*N);
 	fillData(data, particles, N);
-// 	colours_neighbors(data, particles, N / 2);
+ 	//colours_neighbors(data, particles, N / 2);
 	animation->particles = bov_particles_update(animation->particles,data,N);
 	free(data);
 	
@@ -117,7 +116,7 @@ void display_particles(Particle** particles, Animation* animation,bool end, int 
 	char int_string[32];
 	sprintf(int_string, "%d", iter);
 	strcat(screenshot_name, int_string);
-// 	strcat(screenshot_name, ".png");
+	//strcat(screenshot_name, ".png");
 
 	bov_window_t* window = animation->window;
 	double tbegin = bov_window_get_time(window);

@@ -4,11 +4,12 @@
 #include "print_particules.h"
 #include "kernel.h"
 #include "derivatives.h"
+#include <time.h>
 
 typedef struct Setup Setup;
 typedef struct Residual Residual;
 typedef void(*update_positions)(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup);
-typedef void(*update_positions_with_boundaries)(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup, Boundary** boundaries, int* index_part_in_domain);
+typedef void(*update_positions_with_boundaries)(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup, int n_p_domain, Boundary** boundaries, int nb_boundaries);
 typedef enum Free_surface_detection Free_surface_detection;
 
 //CSF       : if  ||n_i|| > threshold => particle i belongs to interface
@@ -20,8 +21,9 @@ struct Setup{
 	int itermax;
 	double timestep;
 	double kh;
-	Verlet* verlet;
+	Search* search;
 	Kernel kernel;
+	//int nThreads;
 	Free_surface_detection free_surface_detection;  // Strategy to estimate if a particle should be considered on the free surface or not
 	double interface_threshold; // Threshold for the detection of particles on the free surface
 	double XSPH_epsilon; // Parameter between 0 and 1 multiplying the XSPH correction;0 if no correction wanted
@@ -35,7 +37,7 @@ struct Residual {
 
 
 
-Setup* Setup_new(int iter, double timestep,double kh, Verlet* verlet, Kernel kernel,Free_surface_detection free_surface_detection,double interface_threshold, double XSPH_epsilon);
+Setup* Setup_new(int iter, double timestep,double kh, Search* search, Kernel kernel,Free_surface_detection free_surface_detection,double interface_threshold, double XSPH_epsilon);
 void Setup_free(Setup* setup);
 
 Residual* Residual_new();
@@ -43,13 +45,13 @@ void free_Residuals(Residual** residuals,int N);
 
 void simulate(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, update_positions update_positions, Setup* setup, Animation* animation);
 void simulate_with_boundaries(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, update_positions_with_boundaries update_positions, 
-			      Setup* setup, Animation* animation, Boundary** boundaries, int* index_part_in_domain);
+			      Setup* setup, Animation* animation, int n_p_domain, Boundary** boundaries, int nb_boundaries);
 
 void random_moves(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup);
 void update_positions_seminar_5(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup);
 void update_positions_ellipse(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup);
 void update_positions_test_static_bubble(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup);
-void update_positions_project(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup, Boundary** boundaries, int* index_part_in_domain);
+void update_positions_project(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup, int n_p_domain, Boundary** boundaries, int nb_boundaries);
 
 void compute_Cs(Particle *particle, Kernel kernel, double kh);
 void assemble_residual_NS(Particle* particle, Particle_derivatives* Particle_derivatives, Residual* residual, Setup* setup);

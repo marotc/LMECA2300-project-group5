@@ -35,6 +35,7 @@ xy* xy_new(double x, double y);
 void xy_reset(xy *p);
 double rand_interval(double a, double b);
 
+void split_thread(int N, int* start, int* end);
 
 double squared(double x);
 double norm(xy *v);
