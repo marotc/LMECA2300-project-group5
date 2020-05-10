@@ -6,11 +6,16 @@ void colormap_Cs(Particle *p, float color[3]);
 void fillData(GLfloat(*data)[8], Particle** particles, int N) {
 // 	float rmax = 100.0*sqrtf(2.0f);
 	double max_norm_vel = 0.0;
+	int i_max = -1;
 	double vel_norm_local;
 	for (int i = 0; i < N; i++) {
 	    vel_norm_local = norm(particles[i]->v);
-	    if (vel_norm_local > max_norm_vel) max_norm_vel = vel_norm_local;
+	    if (vel_norm_local > max_norm_vel) {
+			max_norm_vel = vel_norm_local;
+			i_max = i;
+		}
 	}
+	printf("max velocity norm = %lf, pos = (%lf, %lf)\n", max_norm_vel, particles[i_max]->pos->x, particles[i_max]->pos->y);
 //   	double max_pressure = -INFINITY;
 // 	for (int i = 0; i < N; i++) {
 // 	    if (particles[i]->P > max_pressure) max_pressure = particles[i]->v->x;
@@ -21,19 +26,20 @@ void fillData(GLfloat(*data)[8], Particle** particles, int N) {
 		data[i][1] = p->pos->y;
 		data[i][2] = p->v->x;
 		data[i][3] = p->v->y;
-		//colormap_cell(p, &data[i][4]); // fill color
-		//colormap_Cs(p, &data[i][4]); // fill color
-		//colormap_pressure(p, &data[i][4], max_pressure);
-		//colormap_velocity(p, &data[i][4], max_norm_vel);
- 		if (p->on_boundary) {
- 		  colormap_uni_color_2(&data[i][4]);
-		  //colormap_fs(p, &data[i][4], max_norm_fs);
- 		}
- 		else {
- 		  colormap_uni_color(&data[i][4]);
- 		}
-		
-		data[i][7] = 0.8f; // transparency
+		// colormap_cell(p, &data[i][4]); // fill color
+// 		colormap_Cs(p, &data[i][4]); // fill color
+// 		colormap_pressure(p, &data[i][4], max_pressure);
+		colormap_velocity(p, &data[i][4], max_norm_vel);
+// 		if (p->on_free_surface) {
+// 		  colormap_uni_color_2(&data[i][4]);
+// // 		  colormap_fs(p, &data[i][4], max_norm_fs);
+// 		}
+// 		else {
+// 		  colormap_uni_color(&data[i][4]);
+// 		}
+
+		// data[i][7] = 0.8f; // transparency
+		data[i][7] = 1;
 	}
 }
 
@@ -58,9 +64,9 @@ bov_points_t * load_Grid(Grid* grid,double scale)
 	}
 	bov_points_t *points = bov_points_new(data, 2 * nLines, GL_STATIC_DRAW);
 	bov_points_set_width(points, 0.005);
-	double L = grid->h*grid->nCellx;
-	bov_points_scale(points, (GLfloat[2]){(0.8/L)*scale, (0.8/L)*scale});
-	//bov_points_scale(points, (GLfloat[2]) { 0.008, 0.008 });
+	double L = grid->h * grid->nCellx;
+	// bov_points_scale(points, (GLfloat[2]){0.8/L*scale, 0.8/L*scale});
+	// bov_points_scale(points, (GLfloat[2]) { 0.008, 0.008 });
 	free(data);
 	return points;
 }
@@ -74,17 +80,17 @@ Animation* Animation_new(int N, double timeout,Grid* grid,double scale)
 	bov_window_enable_help(animation->window);
 	animation->N = N;
 	animation->timeout = timeout;
-	double L = grid->h*grid->nCellx;
+	// double L = grid->h*grid->nCellx;
 	////set-up particles////
 	GLfloat(*data)[8] = malloc(sizeof(data[0])*N);
 	bov_points_t *particles = bov_particles_new(data, N, GL_STATIC_DRAW);
 	free(data);
 	// setting particles appearance
-	bov_points_set_width(particles, 0.01);
-	bov_points_set_outline_width(particles, 0.0025);
-	
-	double c = 3;
-	bov_points_scale(particles, (GLfloat[2]){(0.8/L)*(scale*c), (0.8/L)*(scale*c)});//0.8
+	bov_points_set_width(particles, 0.006);
+	// bov_points_set_outline_width(particles, 0.0025);
+
+	double c = 4;
+	// bov_points_scale(particles, (GLfloat[2]){0.4*c/L*scale, 0.4*c/L*scale});//0.8
 	//bov_points_scale(particles, (GLfloat[2]){ 0.008, 0.008 });
 	animation->particles = particles;
 	////set-up grid////
@@ -111,7 +117,7 @@ void display_particles(Particle** particles, Animation* animation,bool end, int 
  	//colours_neighbors(data, particles, N / 2);
 	animation->particles = bov_particles_update(animation->particles,data,N);
 	free(data);
-	
+
 	char screenshot_name[64] = "myEllipse_";
 	char int_string[32];
 	sprintf(int_string, "%d", iter);
@@ -190,12 +196,11 @@ void colormap_fs(Particle *p, float color[3], double max_norm) {
 }
 
 void colormap_velocity(Particle *p, float color[3], double max_norm) {
-	color[0] = 20*p->v->x/max_norm;//10*squared(p->v->x/max_norm) + 10*squared(p->v->y/max_norm);
-	color[1] = 20*p->v->y/max_norm;
-	if (p->on_free_surface)
-	  color[2] = 1.0;
-	else
-	  color[2] = 0.0;
+	double x = norm(p->v);
+
+	color[0] = fmin(4*x - 1.5, -4*x + 4.5);
+	color[1] = fmin(4*x - 0.5, -4*x + 3.5);
+	color[2] = fmin(4*x + 0.5, -4*x + 2.5);
 }
 
 void colormap_pressure(Particle *p, float color[3], double max_P) {

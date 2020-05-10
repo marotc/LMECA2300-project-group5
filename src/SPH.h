@@ -8,8 +8,6 @@
 
 typedef struct Setup Setup;
 typedef struct Residual Residual;
-typedef void(*update_positions)(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup);
-typedef void(*update_positions_with_boundaries)(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup, int n_p_domain, Boundary** boundaries, int nb_boundaries);
 typedef enum Free_surface_detection Free_surface_detection;
 
 //CSF       : if  ||n_i|| > threshold => particle i belongs to interface
@@ -43,29 +41,16 @@ void Setup_free(Setup* setup);
 Residual* Residual_new();
 void free_Residuals(Residual** residuals,int N);
 
-void simulate(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, update_positions update_positions, Setup* setup, Animation* animation);
-void simulate_with_boundaries(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, update_positions_with_boundaries update_positions, 
-			      Setup* setup, Animation* animation, int n_p_domain, Boundary** boundaries, int nb_boundaries);
+void simulate_with_boundaries(Grid* grid, Particle** particles, int n_p,
+	Setup* setup, Animation* animation, double eps);
 
-void random_moves(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup);
-void update_positions_seminar_5(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup);
-void update_positions_ellipse(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup);
-void update_positions_test_static_bubble(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup);
-void update_positions_project(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup, int n_p_domain, Boundary** boundaries, int nb_boundaries);
+void drift(Particle** particles, int N, double dt);
+void density_pressure_update(Particle** particles, int N, double kh, Kernel kernel);
+void apply_BC_Adami_all(Particle **particles, int N, Kernel kernel, double kh);
+void apply_BC_Adami(Particle* pi, Kernel kernel, double kh);
+void inter_particle_forces_pres_all(Particle** particles, int N, double kh, Kernel kernel, double eps);
+void inter_particle_forces_pres(Particle* pi, double kh, Kernel kernel, double eps);
+void kick(Particle **particles, int N, double dt, Kernel kernel, double kh);
 
-void compute_Cs(Particle *particle, Kernel kernel, double kh);
-void assemble_residual_NS(Particle* particle, Particle_derivatives* Particle_derivatives, Residual* residual, Setup* setup);
-void time_integrate(Particle* particle, Residual* residual, double delta_t);
-
-double compute_curvature(Particle *particle, Setup *setup, double epsilon);
-void compute_XSPH_correction(Particle *particle, Kernel kernel, double kh,double epsilon);
-
-void assemble_residual_NS_test(Particle* particle, Particle_derivatives* particle_derivatives, Residual* residual, double radius_circle, Setup* setup);
-
-double compute_admissible_dt(double safety_param, double h_p, double c_0, double rho_0, double mu, double sigma, xy* g);
-
-void compute_normal(Particle *particle, Particle_derivatives* particle_derivatives);
-
-void apply_BC_Adami(Boundary* boundary, Kernel kernel, double kh);
-
+double compute_admissible_dt(double safety_param, double h_p, double c_0, double rho_0, double mu, double sigma, xy* g, double U);
 #endif

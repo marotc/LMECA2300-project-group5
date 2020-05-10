@@ -1,31 +1,39 @@
 #include "particle.h"
+#include <assert.h>
 
 // Private functions
 bool check_distance(xy *p, xy *q, double r);
 
 //////////////////////PARTICLES//////////////////////
-Particle* Particle_new(int index, double m, xy* pos, xy* v, double rho_0, double mu, double c_0, double gamma, double sigma, double background_p, xy* gravity, bool on_boundary) {
+Particle* Particle_new(int index, double m, xy* pos, xy* v, xy *v_imp, double rho_0, double nu, double c_0, double gamma, double sigma, double background_p, xy* gravity, bool on_boundary) {
 	Particle *particle = malloc(sizeof(Particle));
 	particle->index = index;
 	particle->m = m;
 	particle->pos = pos;
 	particle->rho = rho_0;
 	particle->v = v;
+	particle->v_imp = v_imp; // imposed velocity (NULL if not on boundary)
 	particle->on_boundary = on_boundary;
 	particle->P = 0.0; // assuming that the fluid is at rest (P is the dynamic pressure and not the absolute one!)
+	particle->V = rho_0 / m; // inverse (!!) of particle volume
 
 	particle->normal = xy_new(0.0, 0.0);
 	particle->XSPH_correction = xy_new(0.0, 0.0);
 	particle->on_free_surface = false;
 
+	particle->a = xy_new(0,0); // acceleration for momentum velocity
+	particle->as = xy_new(0,0); // acceleration for drift velocity
+
+	particle->vs = xy_new(0,0); // drift velocity
+
 	particle->param = malloc(sizeof(Physical_parameters));
 	particle->param->rho_0 = rho_0;
-	particle->param->dynamic_viscosity = mu;
 	particle->param->gamma = gamma;
 	particle->param->sound_speed = c_0;
 	particle->param->sigma = sigma;
 	particle->param->background_p = background_p;
 	particle->param->gravity = gravity;
+	particle->param->nu = nu;
 
 	particle->cell = NULL;
 	particle->neighborhood = List_new();
@@ -36,6 +44,11 @@ Particle* Particle_new(int index, double m, xy* pos, xy* v, double rho_0, double
 void Particle_free(Particle* particle) {
 	free(particle->pos);
 	free(particle->v);
+	if (particle->v_imp != NULL)
+		free(particle->v_imp);
+	free(particle->a); // acceleration for momentum velocity
+	free(particle->as); // acceleration for drift velocity
+	free(particle->vs);
 	free(particle->normal);
 	free(particle->param->gravity);
 	free(particle->param);
@@ -225,6 +238,7 @@ void add_neighbors_from_cell(Particle* p, Cell* cell , double r) {
 
 // Add to particle p all its neighbors (from 9 cells)
 void add_neighbors_from_cells(Grid* grid, Particle* p) {
+	// printf("Hello from thread #%d\n", omp_get_thread_num());
 	add_neighbors_from_cell(p, p->cell, grid->h);
 	ListNode *node = p->cell->neighboring_cells->head;
 	while (node != NULL) {
@@ -283,105 +297,9 @@ void update_neighborhoods(Grid* grid, Particle** particles, int N, int iter, Sea
 	}
 }
 
-/////////////////////////BOUNDARIES///////////////////////////
-Boundary* Boundary_new(int index_start_boundary, xy** pos, Particle** part, int nb_part_per_bound, xy* vel_BC, xy* acc_BC,
-	double m, double rho_0, double mu, double c_0, double gamma, double background_p, xy* gravity) {
-	Boundary* boundary = (Boundary*)malloc(sizeof(Boundary));
-	boundary->nb_part_on_bound = nb_part_per_bound;
-	boundary->part_on_bound = (Particle**)malloc(nb_part_per_bound * sizeof(Particle*));
-	boundary->v_imposed = vel_BC;
-	boundary->acc_imposed = acc_BC;
-	int j = 0;
-	for (int i = index_start_boundary; i < index_start_boundary + nb_part_per_bound; i++) {
-		xy* gravityP = xy_new(gravity->x, gravity->y);
-		part[i] = Particle_new(i, m, pos[j], xy_new(0.0, 0.0), rho_0, mu, c_0, gamma, 0.0, background_p, gravityP, true); // Initialize particles associated to the boundary in the whole set of particles
-		boundary->part_on_bound[j] = part[i]; // Make the "part_on_boun" pointer of the boundary point to the particles associated to the boundary in the whole set of particles
-		j++;
-	}
-	return boundary;
-}
-
-void Boundary_free(Boundary* boundary)
-{
-	free(boundary->part_on_bound);
-	free(boundary->v_imposed);
-	free(boundary->acc_imposed);
-	free(boundary);
-}
-
-//upper = 1 if upper boundary, -1 if bottom boundary
-xy** build_pos_on_horizontal(double x_min, double y_min, double h_x, double h_y, int n, int nb_part_first_row, int n_row, int upper) {
-	xy** pos = (xy**)malloc(n * sizeof(xy*));
-	int k = 0;
-	for (int i = 0; i < n_row; i++) {
-		for (int j = 0;j < nb_part_first_row + 2 * i;j++) {
-			pos[k] = xy_new(x_min - i * h_x + j * h_x, y_min + i * h_y*upper);
-			k++;
-		}
-	}
-	return pos;
-}
-
-//upper = 1 if right boundary, -1 if left boundary
-xy** build_pos_on_vertical(double x_min, double y_min, double h_x, double h_y, int n, int nb_part_first_row, int n_col, int right) {
-	xy** pos = (xy**)malloc(n * sizeof(xy*));
-	int k = 0;
-	for (int i = 0; i < n_col; i++) {
-		for (int j = 0;j < nb_part_first_row + 2 * i;j++) {
-			pos[k] = xy_new(x_min + i * h_x*right, y_min - i * h_y + j * h_y);
-			k++;
-		}
-	}
-	return pos;
-}
-//rectangle boundaries
-Boundary* build_rectangular_boundaries(xy** coord, Particle** part, int index_start_boundary, int nb_part_per_bound_x, int nb_part_per_bound_y, int nb_part_first_row_x, int nb_part_first_row_y, int nb_rows_per_bound, xy** vel_BC, xy** acc_BC, double h_x, double h_y,
-	double m, double rho_0, double mu, double c_0, double gamma, double background_p, xy* gravity) {
-	Boundary** boundaries = (Boundary**)malloc(4 * sizeof(Boundary*));
-
-	//left boundary
-	xy** pos = build_pos_on_vertical(coord[0]->x, coord[0]->y, h_x, h_y, nb_part_per_bound_y, nb_part_first_row_y, nb_rows_per_bound, -1);
-	boundaries[0] = Boundary_new(index_start_boundary, pos, part, nb_part_per_bound_y, vel_BC[0], acc_BC[0], m, rho_0, mu, c_0, gamma, background_p, gravity);
-	free(pos);
-	//upper boundary
-	pos = build_pos_on_horizontal(coord[1]->x, coord[1]->y, h_x, h_y, nb_part_per_bound_x, nb_part_first_row_x, nb_rows_per_bound, 1);
-	boundaries[1] = Boundary_new(index_start_boundary + nb_part_per_bound_y, pos, part, nb_part_per_bound_x, vel_BC[1], acc_BC[1], m, rho_0, mu, c_0, gamma, background_p, gravity);
-	free(pos);
-	//right boundary
-	pos = build_pos_on_vertical(coord[2]->x, coord[2]->y, h_x, h_y, nb_part_per_bound_y, nb_part_first_row_y, nb_rows_per_bound, 1);
-	boundaries[2] = Boundary_new(index_start_boundary + nb_part_per_bound_y + nb_part_per_bound_x, pos, part, nb_part_per_bound_y, vel_BC[2], acc_BC[2], m, rho_0, mu, c_0, gamma, background_p, gravity);
-	free(pos);
-	//lower boundary
-	pos = build_pos_on_horizontal(coord[3]->x, coord[3]->y, h_x, h_y, nb_part_per_bound_x, nb_part_first_row_x, nb_rows_per_bound, -1);
-	boundaries[3] = Boundary_new(index_start_boundary + 2 * nb_part_per_bound_y + nb_part_per_bound_x, pos, part, nb_part_per_bound_x, vel_BC[3], acc_BC[3], m, rho_0, mu, c_0, gamma, background_p, gravity);
-	free(pos);
-
-	return boundaries;
-}
-
-void free_boundaries(Boundary** boundaries, int nb_boundaries) {
-	for (int i = 0; i < nb_boundaries; i++)
-		Boundary_free(boundaries[i]);
-	free(boundaries);
-}
 
 ////////////////////////////////////////////////
 // Check if |p-q| <= r
 bool check_distance(xy *p, xy *q, double r) {
 	return squared(p->x - q->x) + squared(p->y - q->y) <= squared(r);
-}
-
-// Generate N particles randomly located on [-L,L] x [-L,L]
-// Velocity, rho and e are zero.
-Particle** build_particles(int N, double L) {
-	Particle** particles = (Particle**)malloc(N * sizeof(Particle*));
-	for (int i = 0; i < N; i++) {
-		double x = rand_interval(-L, L);
-		double y = rand_interval(-L, L);
-		xy* pos = xy_new(x, y);
-		xy* vel = xy_new(0, 0);
-		xy* gravity = xy_new(0.0, 0.0);
-		particles[i] = Particle_new(i, 0, pos, vel, 0, 0, 0, 0, 0, 0, gravity, false);
-	}
-	return particles;
 }

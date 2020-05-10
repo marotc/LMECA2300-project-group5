@@ -35,7 +35,7 @@ struct Grid {
 };
 
 struct Physical_parameters {
-	double dynamic_viscosity;
+	double nu;
 	double rho_0;
 	double gamma;
 	double sound_speed;
@@ -49,13 +49,18 @@ struct Particle {
 	double m;     // mass
 	xy* pos;      // position
 	xy* v;        // velocity
+	xy *v_imp;	  // imposed velocity
 	double rho;   // density
 	double P;     // pressure
 	double Cs;    // color field
 	xy* normal;   // normal vector
 	double kappa; // curvature
+	double V;     // inverse of particle volume
 
-	xy* XSPH_correction; // Correction on the velocity field when updating the position of the particles	
+	xy *a, *as; // momentum and drift acceleration
+	xy *vs; // drift velocity (v tilde)
+
+	xy* XSPH_correction; // Correction on the velocity field when updating the position of the particles
 	bool on_free_surface; // boolean to know if particles is on the free surface (used for visualization)
 	bool on_boundary; // boolean to know if particles is on the boundary
 	Physical_parameters* param; // physical parameters associated to the particle
@@ -85,7 +90,7 @@ struct Boundary {
     int nb_part_on_bound;
 	Particle** part_on_bound;
 	xy* v_imposed;
-	xy* acc_imposed;    
+	xy* acc_imposed;
 };
 
 // Grid
@@ -95,7 +100,7 @@ Grid* Grid_new(double x1, double x2, double y1, double y2, double kh); // Grid c
 void Grid_free(Grid* grid); // Grid destructor
 
 // Particle
-Particle* Particle_new(int index, double m, xy* pos, xy* v, double rho_0, double mu, double c_0, double gamma, double sigma, double background_p, xy* gravity,bool on_boundary); // Particle constructor
+Particle* Particle_new(int index, double m, xy* pos, xy* v, xy *v_imp, double rho_0, double nu, double c_0, double gamma, double sigma, double background_p, xy* gravity, bool on_boundary);
 void Particle_free(Particle* particle);
 void free_particles(Particle** particles, int N);
 
@@ -129,16 +134,5 @@ void update_neighborhoods_particles(Grid* grid, Particle** particles, int N, Sea
 void update_from_potential_neighbors(Particle** particles, int N, Search* search);
 void update_neighborhoods(Grid* grid, Particle** particles, int N, int iter, Search* search);
 
-// Build random particles
-Particle** build_particles(int N, double L);
-
-// Boundary
-Boundary* Boundary_new(int index_start_boundary, xy** pos, Particle** part, int nb_part_per_bound, xy* vel_BC, xy* acc_BC,
-double m, double rho_0, double mu, double c_0, double gamma, double background_p, xy* gravity);
-void Boundary_free(Boundary* boundary);
-void free_boundaries(Boundary** boundaries, int N);
-
-Boundary* build_rectangular_boundaries(xy** coord, Particle** part, int index_start_boundary, int nb_part_per_bound_x, int nb_part_per_bound_y, int nb_part_first_row_x, int nb_part_first_row_y, int nb_rows_per_bound, xy** vel_BC, xy** acc_BC, double h_x, double h_y,
-	double m, double rho_0, double mu, double c_0, double gamma, double background_p, xy* gravity);
 
 #endif

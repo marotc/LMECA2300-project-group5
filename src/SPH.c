@@ -1,4 +1,6 @@
 #include "SPH.h"
+#include <assert.h>
+#include <time.h>
 
 Setup* Setup_new(int iter, double timestep,double kh,Search* search,Kernel kernel, Free_surface_detection free_surface_detection, double interface_threshold,double XSPH_epsilon) {
 	Setup* setup = (Setup*)malloc(sizeof(Setup));
@@ -31,456 +33,263 @@ void free_Residuals(Residual** residuals, int N) {
 	free(residuals);
 }
 
-void simulate(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, update_positions update_positions, Setup* setup, Animation* animation){
-	double start = clock();
+void simulate_with_boundaries(Grid* grid, Particle** particles, int n_p,
+	Setup* setup, Animation* animation, double eps) {
+
 	double current_time = 0.0;
-	printf("%d\n", setup->itermax);
+	double dt = setup->timestep;
+	double kh = setup->kh;
+	Kernel kernel = setup->kernel;
+
+	int dummy;
+	double START = omp_get_wtime();
 	for (int iter = 0; iter < setup->itermax; iter++) {
 		printf("----------------------------------------------------- \n");
 		printf("iter %d / %d @ t = %lf \n", iter, setup->itermax, current_time);
-		update_cells(grid, particles, n_p);
-		update_neighborhoods(grid, particles, n_p, iter, setup->search);
 
-		if (animation != NULL)
-			display_particles(particles, animation, false, iter);
-				 
-		update_positions(grid, particles, particles_derivatives, residuals, n_p, setup);
+		double start = omp_get_wtime();
+
+
+		// Step 1 (Kick): Compute intermediate momentum velocity (Eq. 14) and shifting velocity (Eq. 15)
+		// Step 2 (Drift): Shift the particles to their new positions (Eq. 16)
+		drift(particles,n_p,dt);
+
+		// Todo after particles have moved
+		double start_nbh = omp_get_wtime();
+		update_cells(grid, particles, n_p);
+		update_neighborhoods(grid, particles, n_p, iter, setup->search); 
+		double time_nbh = omp_get_wtime() - start_nbh;
+		printf("%lf\n", time_nbh);
+
+		// Step 3: Compute density (Eq. 5) and pressure (Eq. 10)
+		density_pressure_update(particles,n_p,kh,kernel);
+
+		// Assign density, velocity and pressure to boundary particles
+		apply_BC_Adami_all(particles, n_p, setup->kernel, setup->kh);
+
+		// Step 4: Compute inter-particle forces f_pres (Eq. 8), f_visc (Eq. 8), and f_bpres (Eq. 13)
+		inter_particle_forces_pres_all(particles,n_p,kh,kernel,eps);
+
+		// Step 5 (Kick): Compute full time-step velocity (Eq. 17)
+		kick(particles, n_p, dt, kernel, kh);
+
+		if (animation != NULL) display_particles(particles, animation, false, iter);
+
+		double time_total = omp_get_wtime() - start;
+		printf("Time for iteration = %lf s, frac nbh = %.2f\n", time_total, time_nbh / time_total);
+
+		// update_positions(grid, particles, particles_derivatives, residuals, n_p, setup, boundaries, index_part_in_domain);
 		current_time += setup->timestep;
 	}
 	update_cells(grid, particles, n_p);
 	update_neighborhoods(grid, particles, n_p, 0, setup->search);
-	double end = clock();
-	printf("time : %lf", end - start);
+	double TOTAL = omp_get_wtime() - START;
+	printf("\n TOTAL = %lf", TOTAL);
+
 	if (animation != NULL)
 		display_particles(particles, animation, true, -1);
 }
 
 
-void simulate_with_boundaries(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, 
-			      update_positions_with_boundaries update_positions, Setup* setup, Animation* animation, int n_p_domain, Boundary** boundaries, int nb_boundaries) {
-	double current_time = 0.0;
-
-	for (int iter = 0; iter < setup->itermax; iter++) {
-		printf("----------------------------------------------------- \n");
-		printf("iter %d / %d @ t = %lf \n", iter, setup->itermax, current_time);
-		update_cells(grid, particles, n_p);
-		update_neighborhoods(grid, particles, n_p, iter, setup->search);
-		if (animation != NULL)
-			display_particles(particles, animation, false, iter);
-
-		update_positions(grid, particles, particles_derivatives, residuals, n_p, setup, n_p_domain, boundaries, nb_boundaries);
-		current_time += setup->timestep;
-	}
-	update_cells(grid, particles, n_p);
-	update_neighborhoods(grid, particles, n_p, 0, setup->search);
-	if (animation != NULL)
-		display_particles(particles, animation, true, -1);
-}
-
-
-//move randomly each particles
-void random_moves(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup) {
-	double max_speed = 2;
-	for (int i = 0; i < n_p; i++) {
-		double angle = rand_interval(0, 2)*M_PI;
-		double speed = rand_interval(0, max_speed);
-		Particle *p = particles[i];
-		p->v->x = speed * cos(angle);
-		p->v->y = speed * sin(angle);
-		p->pos->x += p->v->x * setup->timestep;
-		p->pos->y += p->v->y * setup->timestep;
-
-		double s = 2;
-		//bouncing with the wall
-		if (p->pos->x < grid->left)
-			p->pos->x = grid->left + s;
-		if (p->pos->x > grid->right)
-			p->pos->x = grid->right - s;
-		if (p->pos->y < grid->bottom)
-			p->pos->y = grid->bottom + s;
-		if (p->pos->y > grid->top)
-			p->pos->y = grid->top - s;
-	}
-}
-
-void update_positions_seminar_5(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup) {
-
-	// Compute Cs, the XSPH correction on the velocity, and the divergence of the positions
-	for (int i = 0; i < n_p; i++) {
-		compute_Cs(particles[i], setup->kernel, setup->kh);
-		if (setup->XSPH_epsilon != 0.0) compute_XSPH_correction(particles[i], setup->kernel, setup->kh,setup->XSPH_epsilon);
-	}
-
-	// Compute derivatives and normal
-	for (int i = 0; i < n_p; i++) {
-		particles_derivatives[i]->div_v = compute_div(particles[i], Particle_get_v, setup->kernel, setup->kh);
-		particles_derivatives[i]->lapl_v->x = compute_lapl(particles[i], Particle_get_v_x, setup->kernel, setup->kh);
-		particles_derivatives[i]->lapl_v->y = compute_lapl(particles[i], Particle_get_v_y, setup->kernel, setup->kh);
-		compute_grad(particles[i], Particle_get_P, setup->kernel, setup->kh, particles_derivatives[i]->grad_P);
-		compute_grad(particles[i], Particle_get_Cs, setup->kernel, setup->kh, particles_derivatives[i]->grad_Cs);
-		particles_derivatives[i]->lapl_Cs = compute_lapl(particles[i], Particle_get_Cs, setup->kernel, setup->kh);
-		// assemble_residual_NS(particles[i], particles_derivatives[i], residuals[i], setup);
-		compute_normal(particles[i], particles_derivatives[i]);
-	}
-
-	// Assemble residual and compute curvature
-	for (int i = 0; i < n_p; i++) {
-	    particles[i]->kappa = 2.0*compute_div(particles[i], Particle_get_normal, setup->kernel, setup->kh);
-	    assemble_residual_NS(particles[i], particles_derivatives[i], residuals[i], setup);
-	}
-
-	// Integrate (obtain new values, i.e. density, velocities, pressure and positions, at time t+1)
-	for (int i = 0; i < n_p; i++)
-		time_integrate(particles[i], residuals[i], setup->timestep);
-}
-
-void compute_all_derivatives(Particle** particles, Particle_derivatives** particles_derivatives, int n, Setup* setup) {
+void drift(Particle** particles, int N, double dt) {
 	#pragma omp parallel
 	{
 		int start, end;
-		split_thread(n, &start, &end);
+		split_thread(N, &start, &end);
 		for (int i = start; i <= end; i++) {
-			if (setup->XSPH_epsilon != 0.0) compute_XSPH_correction(particles[i], setup->kernel, setup->kh, setup->XSPH_epsilon);
-			particles_derivatives[i]->div_v = compute_div(particles[i], Particle_get_v, setup->kernel, setup->kh);
-			particles_derivatives[i]->lapl_v->x = compute_lapl_Adami(particles[i], Particle_get_v_x, setup->kernel, setup->kh);
-			particles_derivatives[i]->lapl_v->y = compute_lapl_Adami(particles[i], Particle_get_v_y, setup->kernel, setup->kh);
-			compute_grad_Adami(particles[i], Particle_get_P, setup->kernel, setup->kh, particles_derivatives[i]->grad_P);
+			Particle *pi = particles[i];
+			if (!pi->on_boundary) { // if bulk particle
+				// Eq. 14
+				pi->v->x += (dt / 2) * pi->a->x;
+				pi->v->y += (dt / 2) * pi->a->y;
+				// Eq. 15
+				pi->vs->x = pi->v->x + (dt / 2) * pi->as->x;
+				pi->vs->y = pi->v->y + (dt / 2) * pi->as->y;
+				// Eq. 16
+				pi->pos->x += dt * pi->vs->x;
+				pi->pos->y += dt * pi->vs->y;
+			}
 		}
 	}
 }
-void assemble_all_residuals_NS(Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n, Setup* setup) {
+
+void density_pressure_update(Particle** particles, int N, double kh, Kernel kernel) {
 	#pragma omp parallel
 	{
 		int start, end;
-		split_thread(n, &start, &end);
-		for (int i = start; i <= end; i++)
-			assemble_residual_NS(particles[i], particles_derivatives[i], residuals[i], setup);
+		split_thread(N, &start, &end);
+		for (int i = start; i <= end; i++) {
+			Particle *pi = particles[i];
+			if (!pi->on_boundary) { // only for fluid particles
+				pi->rho = pi->V = 0;
+				ListNode *node = pi->neighborhood->head;
+				while (node != NULL) {
+					Particle *pj = node->v;
+					double Wij = eval_kernel(pi->pos, pj->pos, kh, kernel);
+					// PySPH's SummationDensity
+					pi->rho += pi->m * Wij;
+					pi->V += Wij; // inverse of particle volume
+					node = node->next;
+				}
+				// PySPH's StateEquation
+				pi->P = squared(pi->param->sound_speed) * (pi->rho - pi->param->rho_0);
+				// printf("(%lf, %lf): m = %lf, rho = %lf, V = %lf, p = %lf\n", pi->pos->x, pi->pos->y, pi->m, pi->rho, pi->V, pi->P);
+			}
+		}
 	}
 }
-void time_integrates_all(Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n, Setup* setup) {
+
+void apply_BC_Adami_all(Particle **particles, int N, Kernel kernel, double kh) {
 	#pragma omp parallel
 	{
 		int start, end;
-		split_thread(n, &start, &end);
+		split_thread(N, &start, &end);
 		for (int i = start; i <= end; i++)
-			time_integrate(particles[i], residuals[i], setup->timestep);
+			apply_BC_Adami(particles[i], kernel, kh);
 	}
 }
 
-void update_positions_project(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup, int n_p_domain, Boundary** boundaries, int nb_boundaries) {
-	// Assign density, velocity and pressure to boundary particles
-	for (int i_b = 0; i_b < nb_boundaries; i_b++) { // loop on the bounadaries
-	  apply_BC_Adami(boundaries[i_b], setup->kernel, setup->kh);
-	}
-	
-	// Compute derivatives of the bulk particles and the XSPH correction term --> that's where the effects of the B.C. particles will be feeled
-	compute_all_derivatives(particles,particles_derivatives, n_p_domain,setup);
-	
-	// Assemble residual based on the computed derivatives of the bulk particles
-	assemble_all_residuals_NS(particles, particles_derivatives, residuals, n_p_domain, setup);
-	
-	// Integrate to update the values (i.e. density, velocities, pressure and positions, at time t+1) carried by the bulk particles
-	time_integrates_all(particles, particles_derivatives, residuals, n_p_domain, setup);
-}
+void apply_BC_Adami(Particle* pi, Kernel kernel, double kh) {
 
-void apply_BC_Adami(Boundary* boundary, Kernel kernel, double kh) {
-  
 	// loop on the particles on this boundary
-    for (int i_p = 0; i_p < boundary->nb_part_on_bound; i_p++) {
-		xy* v_a_tilde = xy_new(0.0,0.0);
-		double p_w = 0.0;
-		double gdotxij = 0.0;
-		double denom = 0.0;
-		Particle *pi = boundary->part_on_bound[i_p];
+	// PySPH's SetWallVelocity
+	Particle *pj;
+	if(pi->on_boundary) {
+		xy *vf = xy_new(0,0); // filtered velocity
+		double p_w = 0.0; // future pressure of particle
+		double sumW = 0; // normalization factor is different from V as the particles near the boundary do not have full kernel support
+
+		double Wij, gdotxij;
+
 		ListNode *node = pi->neighborhood->head;
-	
+
 		// loop on the neighbours of the boundary particle to interpolate the velocity and pressure from the particles in the domain
 		while (node != NULL) {
-			Particle *pj = node->v;
+			pj = node->v;
 			if (!pj->on_boundary) { // we interpolate only from the particles inside the domain, we don't take the contributions from the neighbouring boundary particles!
-				// Velocity
-				v_a_tilde->x += pj->v->x * eval_kernel(pi->pos, pj->pos, kh, kernel); // Eq. 22 in Adami 2012
-				v_a_tilde->y += pj->v->y * eval_kernel(pi->pos, pj->pos, kh, kernel); // Eq. 22 in Adami 2012
-				// Pressure
-				gdotxij = (pj->param->gravity->x - boundary->acc_imposed->x) * (pi->pos->x - pj->pos->x)
-						+ (pj->param->gravity->y - boundary->acc_imposed->y) * (pi->pos->y - pj->pos->y);
-				p_w += pj->P * eval_kernel(pi->pos, pj->pos, kh, kernel) + pj->rho * gdotxij * eval_kernel(pi->pos, pj->pos, kh, kernel); // Eq. 27 in Adami 2012
+				Wij = eval_kernel(pi->pos, pj->pos, kh, kernel);
 				// Normalization
-				denom += eval_kernel(pi->pos, pj->pos, kh, kernel);
+				sumW += eval_kernel(pi->pos, pj->pos, kh, kernel);
+				// Velocity (Adami2012, Eq. 22)
+				vf->x += pj->v->x * Wij;
+				vf->y += pj->v->y * Wij;
+				// Pressure
+				gdotxij = (pj->param->gravity->x) * (pi->pos->x - pj->pos->x)
+				  + (pj->param->gravity->y) * (pi->pos->y - pj->pos->y);
+				assert(gdotxij == 0);
+				p_w += pj->P * Wij + pj->rho * gdotxij * Wij; // Eq. 27 in Adami 2012
 			}
 			node = node->next;
 		}
 		// calculation is done only for the relevant boundary particles.
-		// denom (and v_a_tilde, p_w) is 0 for particles sufficiently away from the
-		// solid-fluid interface
-		if (denom > 1e-12) {
-			v_a_tilde->x /= denom;
-			v_a_tilde->y /= denom;
-			p_w /= denom;
+	    // denom (and v_a_tilde, p_w) is 0 for solid particles sufficiently away from the
+	    // solid-fluid interface
+		if (sumW > 1e-12) {
+			vf->x /= sumW;
+			vf->y /= sumW;
+			p_w /= sumW;
 		}
 		// Velocity
-		pi->v->x = 2.0*boundary->v_imposed->x - v_a_tilde->x; // Eq. 23 in Adami 2012
-		pi->v->y = 2.0*boundary->v_imposed->y - v_a_tilde->y; // Eq. 23 in Adami 2012
-		free(v_a_tilde);
-		// Pressure 
-		boundary->part_on_bound[i_p]->P = p_w; // Eq. 27 in Adami 2012
+		pi->v->x = 2.0*pi->v_imp->x - vf->x; // Eq. 23 in Adami 2012
+		pi->v->y = 2.0*pi->v_imp->y - vf->y; // Eq. 23 in Adami 2012
+		// Pressure
+		pi->P = p_w; // Eq. 27 in Adami 2012
 		// Density
 		double rho_0 = pi->param->rho_0;
-		double gamma = pi->param->gamma;
 		double c = pi->param->sound_speed;
-		double background_p = pi->param->background_p;
-		double p_0 = squared(c) * rho_0 / gamma;
-		boundary->part_on_bound[i_p]->rho = rho_0 * pow(((p_w-background_p)/p_0)+1.0, 1.0/gamma); // Eq. 28 in Adami 2012
-    }
+		double p_0 = squared(c) * rho_0;
+		pi->rho = rho_0 * (p_w/p_0 + 1); // Eq. 28 in Adami 2012
+
+		// Cleanup
+		free(vf);
+	}
 }
 
-void compute_Cs(Particle *particle, Kernel kernel, double kh) {
-	particle->Cs = 0;
-	Particle *pi = particle;
-	ListNode *node = pi->neighborhood->head;
-	while (node != NULL) {
-		Particle *pj = node->v;
-		particle->Cs += (pj->m / pj->rho) * eval_kernel(pi->pos, pj->pos, kh, kernel);
-		node = node->next;
+void inter_particle_forces_pres_all(Particle** particles, int N, double kh, Kernel kernel, double eps) {
+	#pragma omp parallel
+	{
+		int start, end;
+		split_thread(N, &start, &end);
+		for (int i = start; i <= end; i++)
+			inter_particle_forces_pres(particles[i], kh, kernel, eps);
 	}
-	// printf("pos = (%lf, %lf), Cs = %lf\n", particle->pos->x, particle->pos->y, particle->Cs);
 }
 
-void compute_normal(Particle *particle, Particle_derivatives* particle_derivatives) {
-	particle->normal = xy_new(0.0, 0.0);
-	xy *n = particle_derivatives->grad_Cs; // surface normal inward
-	double norm_n = norm(n); // norm of n
-	particle->normal->x = n->x / norm_n;
-	particle->normal->y = n->y / norm_n;
+void inter_particle_forces_pres(Particle* pi, double kh, Kernel kernel, double eps) {
+	double Vi, Vj, Vi2Vj2, r2ij, p_ij, tmp, etai, etaj, eta_ij, F_ij;
+	xy *DWij;
+	Particle *pj;
+	if (!pi->on_boundary) {
+		pi->a->x = pi->a->y = 0; // momentum acceleration
+		pi->as->x = pi->as->y = 0; // drift acceleration
+		ListNode *node = pi->neighborhood->head;
+		int cnt = 0;
+		while (node != NULL) {
+			pj = node->v;
+			cnt++;
+
+			// PySPH
+			Vi = 1.0 / pi->V;
+			Vj = 1.0 / pj->V;
+			Vi2Vj2 = Vi * Vi + Vj * Vj;
+			r2ij = squared(pi->pos->x - pj->pos->x) + squared(pi->pos->y - pj->pos->y); // squared distance between pi and pj
+			DWij = grad_kernel(pi->pos, pj->pos, kh, kernel);
+
+			// PySPH's MomentumEquationPressureGradient
+			p_ij = (pj->rho * pi->P + pi->rho * pj->P) / (pi->rho + pj->rho); // density-weighted pressure
+			tmp = (-p_ij / pi->m) * Vi2Vj2;
+
+			pi->a->x += tmp * DWij->x;
+			pi->a->y += tmp * DWij->y;
+
+			tmp = -pi->param->background_p / pi->m * Vi2Vj2;
+			pi->as->x += tmp * DWij->x;
+			pi->as->y += tmp * DWij->y;
+
+			// PySPH's MomentumEquationViscosity AND SolidWallNoSlipBC
+			etai = pi->param->nu * pi->rho;
+			etaj = pj->param->nu * pj->rho;
+			eta_ij = 2 * etai * etaj / (etai + etaj);
+			F_ij = DWij->x * (pi->pos->x - pj->pos->x) + DWij->y * (pi->pos->y - pj->pos->y);
+			tmp = (1.0 / pi->m) * Vi2Vj2 * eta_ij * F_ij / (r2ij + eps);
+			// if(r2ij == 0) assert(pi == pj);
+			pi->a->x += tmp * (pi->v->x - pj->v->x);
+			pi->a->y += tmp * (pi->v->y - pj->v->y);
+
+			// Good luck to proofread this...
+			// PySPH's MomentumEquationArtificialStress
+			if (!pj->on_boundary) { // wall particles have no drift velocity vs, so they don't contribute!!
+				tmp = 1.0 / pi->m * Vi2Vj2;
+				pi->a->x += tmp * (
+				(pi->rho * pi->v->x * (pi->vs->x - pi->v->x) + pj->rho * pj->v->x * (pj->vs->x - pj->v->x)) / 2 * DWij->x +
+				(pi->rho * pi->v->x * (pi->vs->y - pi->v->y) + pj->rho * pj->v->x * (pj->vs->y - pj->v->y)) / 2 * DWij->y
+				);
+				pi->a->y += tmp * (
+				(pi->rho * pi->v->y * (pi->vs->x - pi->v->x) + pj->rho * pj->v->y * (pj->vs->x - pj->v->x)) / 2 * DWij->x +
+				(pi->rho * pi->v->y * (pi->vs->y - pi->v->y) + pj->rho * pj->v->y * (pj->vs->y - pj->v->y)) / 2 * DWij->y
+				);
+			}
+			free(DWij);
+			node = node->next;
+		}
+		assert(cnt >= 21);
+	}
 }
 
-// Assemble the residual of the (incompressible) Navier-Stokes equations based on the derivatives available
-void assemble_residual_NS(Particle* particle, Particle_derivatives* particle_derivatives, Residual* residual,Setup* setup) {
-	double mu_i = particle->param->dynamic_viscosity;
-
-	double rho_i = particle->rho;
-	double div_vel_i = particle_derivatives->div_v;
-	xy* grad_P = particle_derivatives->grad_P;
-	xy* lapl_v = particle_derivatives->lapl_v;
-	
-	// Body forces to be added
-	double fs_x = particle->param->gravity->x ; double fs_y = particle->param->gravity->y;
-	
-	// --- Surface tension effect ---
-	if (setup->free_surface_detection != NONE) { 
-	  // Compute UNIT normal vector
-	  xy *n = particle_derivatives->grad_Cs; // surface normal inward
-	  double norm_n = norm(n);
-	  n->x /= norm_n, n->y /= norm_n;
-
-	  double lapl_Cs = particle_derivatives->lapl_Cs;
-	  // Choose between curvature estimated with Laplacian of colour field or with divergence of normal
-	  // 	double kappa = - lapl_Cs / norm_n; // curvature with Laplacian of colour field
-	  // Apply surface tension only on particles in the vicinity the interface
-	  bool criterion;
-	  // Identification based on the norm of the normal
-	  if (setup->free_surface_detection == CSF)
-		  criterion = norm_n > setup->interface_threshold;
-	  // Identification based on the divergence of the position vector
-	  else if (setup->free_surface_detection == DIVERGENCE)
-		  criterion = compute_div(particle, Particle_get_pos, setup->kernel, setup->kh) <= setup->interface_threshold;
-	  else
-		  criterion = false;
-	  if (criterion) {
-		  particle->on_free_surface = true;
-		  double kappa = particle->kappa;
-		  fs_x += -particle->param->sigma * kappa * n->x;
-		  fs_y += -particle->param->sigma * kappa * n->y;
-	  }
-	  else
-		  particle->on_free_surface = false;
+void kick(Particle **particles, int N, double dt, Kernel kernel, double kh) {
+	#pragma omp parallel
+	{
+		int start, end;
+		split_thread(N, &start, &end);
+		for (int i = start; i <= end; i++) {
+			Particle *pi = particles[i];
+			if (!pi->on_boundary) {
+				pi->v->x += (dt / 2) * pi->a->x;
+				pi->v->y += (dt / 2) * pi->a->y;
+			}
+		}
 	}
-	residual->mass_eq = -rho_i * div_vel_i;
-	residual->momentum_x_eq = (-1.0/rho_i) * grad_P->x + (mu_i/rho_i) * lapl_v->x + fs_x;
-	residual->momentum_y_eq = (-1.0/rho_i) * grad_P->y + (mu_i/rho_i) * lapl_v->y + fs_y;
-	//if(lapl_v->x != lapl_v->x || lapl_v->y != lapl_v->y)
-	//printf("!!! Part #%d with (lapl_v_x, lapl_v_y) = (%2.6f, %2.6f) !!!\n", particle->index, lapl_v->x, lapl_v->y);
-	//if(grad_P->x != grad_P->x || grad_P->y != grad_P->y)
-    //printf("!!! Part #%d with (gradP_x, gradP_y) = (%2.6f, %2.6f) !!!\n", particle->index, grad_P->x, grad_P->y);
 }
-
-
-
-// Time integrate the Navier-Stokes equations based on the residual already assembled
-void time_integrate(Particle* particle, Residual* residual, double delta_t) {
-
-// 	// Update position with an Euler explicit scheme
-// 	particle->pos->x += delta_t * particle->v->x - delta_t * particle->XSPH_correction->x;
-// 	particle->pos->y += delta_t * particle->v->y - delta_t * particle->XSPH_correction->y;
-
-	// Update density and velocity with an Euler explicit scheme (TODO: implement more accurate and more stable schemes)
-	particle->rho += delta_t * residual->mass_eq;
-	particle->v->x += delta_t * residual->momentum_x_eq;
-	particle->v->y += delta_t * residual->momentum_y_eq;
-	
-	// Update position with an Euler explicit scheme // WARNING: before (explicit) or after (implicit) the updates of the field variables?
-	particle->pos->x += delta_t * particle->v->x - delta_t * particle->XSPH_correction->x;
-	particle->pos->y += delta_t * particle->v->y - delta_t * particle->XSPH_correction->y;
-
-	// Update pressure with Tait's equation of state
-	double B = squared(particle->param->sound_speed) * particle->param->rho_0 / particle->param->gamma;
-	particle->P = B * (pow(particle->rho / particle->param->rho_0, particle->param->gamma) - 1) + particle->param->background_p;
-}
-
-// Normal should be available everywhere!
-double compute_curvature(Particle *particle, Setup *setup, double epsilon) {
-	double num = epsilon * 2 * compute_div(particle, Particle_get_normal, setup->kernel, setup->kh);
-	printf("%lf\n", compute_div(particle, Particle_get_normal, setup->kernel, setup->kh));
-	double denom = 0;
-	Particle *pi = particle;
-	ListNode *node = pi->neighborhood->head;
-	while (node != NULL) {
-		Particle *pj = node->v;
-		xy *grad_W = grad_kernel(pi->pos, pj->pos, setup->kh, setup->kernel);
-		denom += sqrt(squared(pi->pos->x - pj->pos->x) + squared(pi->pos->y - pj->pos->y)) *
-			(pj->m / pj->rho) * norm(grad_W);
-		free(grad_W);
-		node = node->next;
-	}
-	return num / denom;
-}
-
-void compute_XSPH_correction(Particle *pi, Kernel kernel, double kh, double epsilon) {
-	xy_reset(pi->XSPH_correction);
-	ListNode *node = pi->neighborhood->head;
-	while (node != NULL) {
-		Particle *pj = node->v;
-		pi->XSPH_correction->x += (pj->m / pj->rho) * (pi->v->x - pj->v->x) * eval_kernel(pi->pos, pj->pos, kh, kernel);
-		pi->XSPH_correction->y += (pj->m / pj->rho) * (pi->v->y - pj->v->y) * eval_kernel(pi->pos, pj->pos, kh, kernel);
-		node = node->next;
-	}
-	pi->XSPH_correction->x *= epsilon;
-	pi->XSPH_correction->y *= epsilon;
-}
-
-void update_positions_ellipse(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup) {
-
-  	// Compute Cs, the XSPH correction on the velocity, and the divergence of the positions
-	for (int i = 0; i < n_p; i++) {
-		compute_Cs(particles[i], setup->kernel, setup->kh);
-		if (setup->XSPH_epsilon != 0.0) compute_XSPH_correction(particles[i], setup->kernel, setup->kh,setup->XSPH_epsilon);
-	}
-	// Compute derivatives and residuals
-	for (int i = 0; i < n_p; i++) {
-		particles_derivatives[i]->div_v = compute_div(particles[i], Particle_get_v, setup->kernel, setup->kh);
-		particles_derivatives[i]->lapl_v->x = compute_lapl(particles[i], Particle_get_v_x, setup->kernel, setup->kh);
-		particles_derivatives[i]->lapl_v->y = compute_lapl(particles[i], Particle_get_v_y, setup->kernel, setup->kh);
-		compute_grad(particles[i], Particle_get_P, setup->kernel, setup->kh, particles_derivatives[i]->grad_P);
-		compute_grad(particles[i], Particle_get_Cs, setup->kernel, setup->kh, particles_derivatives[i]->grad_Cs);
-		particles_derivatives[i]->lapl_Cs = compute_lapl(particles[i], Particle_get_Cs, setup->kernel, setup->kh);
-		assemble_residual_NS(particles[i], particles_derivatives[i], residuals[i],setup);
-	}
-	int index_x_max, index_x_min, index_y_max, index_y_min;
-	double pos_x_max = -INFINITY, pos_x_min = INFINITY, pos_y_max = -INFINITY, pos_y_min = INFINITY;
-	// Integrate (new values (i.e. density, velocities) at time t+1)
-	for (int i = 0; i < n_p; i++) {
-		time_integrate(particles[i], residuals[i], setup->timestep);
-		if (particles[i]->pos->x > pos_x_max) pos_x_max = particles[i]->pos->x, index_x_max = i;
-		if (particles[i]->pos->x < pos_x_min) pos_x_min = particles[i]->pos->x, index_x_min = i;
-		if (particles[i]->pos->y > pos_y_max) pos_y_max = particles[i]->pos->y, index_y_max = i;
-		if (particles[i]->pos->y < pos_y_min) pos_y_min = particles[i]->pos->y, index_y_min = i;
-	}
-	// Compute semi-major axis of an ellipse
-	double a_ellipse = particles[index_x_max]->pos->x - particles[index_x_min]->pos->x;
-	double b_ellipse = particles[index_y_max]->pos->y - particles[index_y_min]->pos->y;
-	printf("a = %lf, b = %lf\n", a_ellipse * 0.5, b_ellipse * 0.5);
-}
-
-void update_positions_test_static_bubble(Grid* grid, Particle** particles, Particle_derivatives** particles_derivatives, Residual** residuals, int n_p, Setup* setup) {
-
-	// Compute Cs, the XSPH correction on the velocity, and the divergence of the positions
-	int index_x_max, index_x_min, index_y_max, index_y_min;
-	double pos_x_max = -INFINITY, pos_x_min = INFINITY, pos_y_max = -INFINITY, pos_y_min = INFINITY;
-	for (int i = 0; i < n_p; i++) {
-		compute_Cs(particles[i], setup->kernel, setup->kh);
-		if (setup->XSPH_epsilon != 0.0) compute_XSPH_correction(particles[i], setup->kernel, setup->kh,setup->XSPH_epsilon);
-		// Compute radius of circle
-		if (particles[i]->pos->x > pos_x_max) pos_x_max = particles[i]->pos->x, index_x_max = i;
-		if (particles[i]->pos->x < pos_x_min) pos_x_min = particles[i]->pos->x, index_x_min = i;
-		if (particles[i]->pos->y > pos_y_max) pos_y_max = particles[i]->pos->y, index_y_max = i;
-		if (particles[i]->pos->y < pos_y_min) pos_y_min = particles[i]->pos->y, index_y_min = i;
-	}
-	double radius_circle = 0.5*(particles[index_x_max]->pos->x - particles[index_x_min]->pos->x);
-
-	// Compute derivatives and normal
-	for (int i = 0; i < n_p; i++) {
-		particles_derivatives[i]->div_v = compute_div(particles[i], Particle_get_v, setup->kernel, setup->kh);
-		particles_derivatives[i]->lapl_v->x = compute_lapl(particles[i], Particle_get_v_x, setup->kernel, setup->kh);
-		particles_derivatives[i]->lapl_v->y = compute_lapl(particles[i], Particle_get_v_y, setup->kernel, setup->kh);
-		compute_grad(particles[i], Particle_get_P, setup->kernel, setup->kh, particles_derivatives[i]->grad_P);
-		compute_grad(particles[i], Particle_get_Cs, setup->kernel, setup->kh, particles_derivatives[i]->grad_Cs);
-		particles_derivatives[i]->lapl_Cs = compute_lapl(particles[i], Particle_get_Cs, setup->kernel, setup->kh);
-// 		assemble_residual_NS(particles[i], particles_derivatives[i], residuals[i], setup);
-// 		assemble_residual_NS_test(particles[i], particles_derivatives[i], residuals[i], radius_circle, setup);
-		compute_normal(particles[i], particles_derivatives[i]);
-	}
-
-	// Assemble residual and compute curvature
-	for (int i = 0; i < n_p; i++) {
-	    particles[i]->kappa = 2.0*compute_div(particles[i], Particle_get_normal, setup->kernel, setup->kh);
-	    assemble_residual_NS_test(particles[i], particles_derivatives[i], residuals[i], radius_circle, setup);
-	}
-
-	// Integrate (obtain new values, i.e. density, velocities, pressure and positions, at time t+1)
-	for (int i = 0; i < n_p; i++)
-		time_integrate(particles[i], residuals[i], setup->timestep);
-}
-
-// Assemble the residual of the (incompressible) Navier-Stokes equations based on the derivatives available
-void assemble_residual_NS_test(Particle* particle, Particle_derivatives* particle_derivatives, Residual* residual, double radius_circle, Setup* setup) {
-	double mu_i = particle->param->dynamic_viscosity;
-
-	double rho_i = particle->rho;
-	double div_vel_i = particle_derivatives->div_v;
-	xy* grad_P = particle_derivatives->grad_P;
-	xy* lapl_v = particle_derivatives->lapl_v;
-
-
-	xy *n = particle_derivatives->grad_Cs; // surface normal
-	double norm_n = norm(n); // norm of n
-	double lapl_Cs = particle_derivatives->lapl_Cs;
-	double kappa = - lapl_Cs / norm_n; // curvature
-	double kappa_2 = particle->kappa;
-
-	// Exact values of normal and curvature for a circle centered in (0,0)
-	xy* n_exact = xy_new(particle->pos->x, particle->pos->y);
-	double norm_n_exact = norm(n_exact);
-	double kappa_exact = 1.0 / radius_circle;
-
-	double fs_x = 0; double fs_y = 0;
-	// Apply surface tension only on particles in the vicinity the interface
-	if (particle->on_free_surface) {
-	    fs_x = - particle->param->sigma * kappa_exact * n->x / norm_n;
-	    fs_y = - particle->param->sigma * kappa_exact * n->y / norm_n;
-		//printf("pos = (%lf, %lf), n_exact = (%lf, %lf), n = (%lf, %lf), ||n|| = %lf, fs = (%lf, %lf), kappa_exact = %2.3f, kappa = %2.6f \n", particle->pos->x, particle->pos->y,-n_exact->x / norm_n_exact, -n_exact->y / norm_n_exact, n->x / norm_n, n->y / norm_n, norm_n, fs_x, fs_y, kappa_exact, kappa);
-	    printf("kappa_exact = %2.3f, kappa = %2.6f, kappa_div_n = %2.6f \n", kappa_exact, kappa, kappa_2);
-	}
-
-	residual->mass_eq = -rho_i * div_vel_i;
-	residual->momentum_x_eq = (-1.0/rho_i) * grad_P->x + (mu_i/rho_i) * lapl_v->x + fs_x;
-	residual->momentum_y_eq = (-1.0/rho_i) * grad_P->y + (mu_i/rho_i) * lapl_v->y + fs_y;
-
-}
-
-double compute_admissible_dt(double safety_param, double h_p, double c_0, double rho_0, double mu, double sigma, xy* g) {
-	// Relations from "Simulation of surface tension in 2D and 3D with smoothed particle hydrodynamics method", Zhang (2010)
-	double dt_1 = 0.25 * h_p / c_0; // propagation of sound waves
-	double dt_2 = INFINITY;
-	if (mu > 0.0) 
-		dt_2 = 0.125 * (h_p*h_p) / (mu / rho_0); // viscous diffusion
-	double dt_3 = INFINITY;
-	if (sigma > 0.0) 
-		dt_3 = 0.25 * sqrt((rho_0*pow(h_p,3))/(2*M_PI*sigma)); // surface tension (capillary waves)
-	double dt_4 = INFINITY;
-	if (g->x > 0.0 || g->y > 0.0) 
-		dt_4 = 0.25 * sqrt(h_p/norm(g)); // surface tension (capillary waves)
-  
-	double dt_min_interm = fmin(dt_1, dt_2);
-	dt_min_interm = fmin(dt_min_interm, dt_3);
-	return safety_param * fmin(dt_min_interm, dt_4);
+double compute_admissible_dt(double safety_param, double h_p, double c_0, double rho_0, double nu, double sigma, xy* g, double U) {
+	return fmin(0.25 * h_p / (c_0 + U), 0.25 * h_p * h_p / nu);
 }
