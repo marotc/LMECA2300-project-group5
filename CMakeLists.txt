@@ -31,3 +31,7 @@ target_link_libraries(anm
 
 # set anm as the startup project in visual studio
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT anm)
+
+find_package(OpenMP REQUIRED)
+target_link_libraries(anm PRIVATE OpenMP::OpenMP_C)
+

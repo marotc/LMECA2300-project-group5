@@ -5,44 +5,48 @@ void colormap_Cs(Particle *p, float color[3]);
 // Fills data with particle data
 void fillData(GLfloat(*data)[8], Particle** particles, int N) {
 // 	float rmax = 100.0*sqrtf(2.0f);
-	double max_norm_vel = 0.0;
+	double max_norm_vel = -1;
 	int i_max = -1;
 	double vel_norm_local;
 	for (int i = 0; i < N; i++) {
-	    vel_norm_local = norm(particles[i]->v);
-	    if (vel_norm_local > max_norm_vel) {
+		vel_norm_local = norm(particles[i]->v);
+		if (vel_norm_local > max_norm_vel) {
 			max_norm_vel = vel_norm_local;
 			i_max = i;
 		}
 	}
-	printf("max velocity norm = %lf, pos = (%lf, %lf)\n", max_norm_vel, particles[i_max]->pos->x, particles[i_max]->pos->y);
-//   	double max_pressure = -INFINITY;
-// 	for (int i = 0; i < N; i++) {
-// 	    if (particles[i]->P > max_pressure) max_pressure = particles[i]->v->x;
-// 	}
+	// printf("max velocity norm = %lf, pos = (%lf, %lf)\n", max_norm_vel, particles[i_max]->pos->x, particles[i_max]->pos->y);
 	for (int i = 0; i < N; i++) {
 		Particle* p = particles[i];
-		data[i][0] = p->pos->x;
-		data[i][1] = p->pos->y;
-		data[i][2] = p->v->x;
-		data[i][3] = p->v->y;
-		// colormap_cell(p, &data[i][4]); // fill color
-// 		colormap_Cs(p, &data[i][4]); // fill color
-// 		colormap_pressure(p, &data[i][4], max_pressure);
-		colormap_velocity(p, &data[i][4], max_norm_vel);
-		colormap_init_pos(p, &data[i][4]);
-// 		if (p->on_free_surface) {
-// 		  colormap_uni_color_2(&data[i][4]);
-// // 		  colormap_fs(p, &data[i][4], max_norm_fs);
-// 		}
-// 		else {
-// 		  colormap_uni_color(&data[i][4]);
-// 		}
-
-		// data[i][7] = 0.8f; // transparency
-		data[i][7] = 1;
+		if(!p->on_boundary) {
+			data[i][0] = p->pos->x;
+			data[i][1] = p->pos->y;
+			data[i][2] = p->v->x;
+			data[i][3] = p->v->y;
+			// colormap_velocity(p, &data[i][4], max_norm_vel);
+			colormap_init_pos(p, &data[i][4]);
+			data[i][7] = 1; // transparency
+		}
 	}
 }
+
+bov_points_t * load_box() {
+	GLfloat(*data)[2] = malloc(sizeof(data[0]) * 2 * 4);
+	data[0][0] = 0, data[0][1] = 0;
+	data[1][0] = 1, data[1][1] = 0;
+	data[2][0] = 1, data[2][1] = 0;
+	data[3][0] = 1, data[3][1] = 1;
+	data[4][0] = 1, data[4][1] = 1;
+	data[5][0] = 0, data[5][1] = 1;
+	data[6][0] = 0, data[6][1] = 1;
+	data[7][0] = 0, data[7][1] = 0;
+
+	bov_points_t *points = bov_points_new(data, 2 * 4, GL_STATIC_DRAW);
+	bov_points_set_width(points, 0.004);
+	free(data);
+	return points;
+}
+
 
 bov_points_t * load_Grid(Grid* grid,double scale)
 {
@@ -76,7 +80,9 @@ Animation* Animation_new(int N, double timeout,Grid* grid, double particle_width
 {
 	Animation* animation = (Animation*)malloc(sizeof(Animation));
 	animation->window = bov_window_new(1024, 780, "ANM Project: SPH");
-// 	bov_window_set_color(animation->window, (GLfloat[]) { 0.9f, 0.85f, 0.8f, 0.0f });
+	bov_window_translate(animation->window, (GLfloat[]) { -0.5f, -0.5f });
+	bov_window_set_zoom(animation->window, 1.5);
+	// 	bov_window_set_color(animation->window, (GLfloat[]) { 0.9f, 0.85f, 0.8f, 0.0f });
 	bov_window_set_color(animation->window, (GLfloat[]) { 1.0f, 1.0f, 1.0f, 0.0f });
 	bov_window_enable_help(animation->window);
 	animation->N = N;
@@ -99,6 +105,7 @@ Animation* Animation_new(int N, double timeout,Grid* grid, double particle_width
 		animation->grid = load_Grid(grid, c);
 	else
 		animation->grid = NULL;
+	animation->box = load_box();
 	return animation;
 }
 void Animation_free(Animation* animation)
@@ -110,39 +117,60 @@ void Animation_free(Animation* animation)
 	free(animation);
 }
 
-void display_particles(Particle** particles, Animation* animation,bool end, int iter)
-{
+void display_particles(Particle** particles, Animation* animation, bool end, bool take_screenshot, double t) {
 	int N = animation->N;
 	GLfloat(*data)[8] = malloc(sizeof(data[0])*N);
 	fillData(data, particles, N);
- 	//colours_neighbors(data, particles, N / 2);
 	animation->particles = bov_particles_update(animation->particles,data,N);
 	free(data);
 
-	char screenshot_name[64] = "myEllipse_";
-	char int_string[32];
-	sprintf(int_string, "%d", iter);
-	strcat(screenshot_name, int_string);
-	//strcat(screenshot_name, ".png");
+	// path for screenshot
+	char screenshot_path[128];
+	sprintf(screenshot_path, "../screenshots/t=%010lf", t);
+
+	// prepare annotations
+	GLubyte message_time[128], message_upper[128], message_lower[128];
+	sprintf(message_time, "t = %.2lf", t);
+	if(t < 60) sprintf(message_lower, "Lower lid is on");
+	else sprintf(message_lower, "Lower lid is off");
+	if(t >= 30 && t < 90) sprintf(message_upper, "Upper lid is on");
+	else sprintf(message_upper, "Upper lid is off");
+
+	bov_text_t* text_time = bov_text_new(message_time, GL_STATIC_DRAW);
+	bov_text_t* text_upper = bov_text_new(message_upper, GL_STATIC_DRAW);
+	bov_text_t* text_lower = bov_text_new(message_lower, GL_STATIC_DRAW);
+	bov_text_set_pos(text_time, (GLfloat[]){0,1.07});
+	bov_text_set_pos(text_upper, (GLfloat[]){0,1.01});
+	bov_text_set_pos(text_lower, (GLfloat[]){0,-0.04});
+
 
 	bov_window_t* window = animation->window;
 	double tbegin = bov_window_get_time(window);
 	if (!end){
 		while (bov_window_get_time(window) - tbegin < animation->timeout) {
+			bov_lines_draw(window,animation->box,0, BOV_TILL_END);
 			if(animation->grid != NULL)
 				bov_lines_draw(window,animation->grid,0, BOV_TILL_END);
 			bov_particles_draw(window, animation->particles, 0, BOV_TILL_END);
-			if (iter%10 == 0) bov_window_screenshot(window, screenshot_name);
+			bov_text_draw(window, text_time);
+			bov_text_draw(window, text_upper);
+			bov_text_draw(window, text_lower);
+			if(take_screenshot) bov_window_screenshot(window, screenshot_path);
+
 			bov_window_update(window);
 		}
 	}
 	else {
 		// we want to keep the window open with everything displayed
 		while (!bov_window_should_close(window)) {
+			bov_lines_draw(window,animation->box,0, BOV_TILL_END);
 			if (animation->grid != NULL)
 				bov_lines_draw(window, animation->grid, 0, BOV_TILL_END);
 			bov_particles_draw(window, animation->particles, 0, BOV_TILL_END);
-// 			bov_window_screenshot(window, screenshot_name);
+			bov_text_draw(window, text_time);
+			bov_text_draw(window, text_upper);
+			bov_text_draw(window, text_lower);
+			if(take_screenshot) bov_window_screenshot(window, screenshot_path);
 			bov_window_update_and_wait_events(window);
 		}
 	}

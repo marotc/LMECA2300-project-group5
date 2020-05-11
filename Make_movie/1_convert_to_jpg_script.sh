@@ -1,11 +1,6 @@
 #!/bin/bash
-i=0
-f=0
-while [ $f -le 44500 ]
-do
-	convert -quality 100 myEllipse_$f  yo_$i.jpg;
-	i=$(( i + 1 ))
-	f=$(( f + 500 ))
-	echo $f
+for f in ../screenshots/*; do 
+	echo `basename $f`;
+	convert -quality 100 $f `basename $f`.jpg;
 done
-# convert -delay 20 -quality 100 yo_*.jpg movie.mpg
+#do convert quality 100 $f $f.jpg; done

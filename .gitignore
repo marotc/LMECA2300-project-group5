@@ -1,2 +1,6 @@
 build
 *.kdev4
+
+*.jpg
+screenshots
+*.mpg

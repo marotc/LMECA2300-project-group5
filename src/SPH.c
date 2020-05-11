@@ -88,7 +88,6 @@ void simulate_with_boundaries(Grid* grid, Particle** particles, int n_p,
 			}
 		}
 
-
 		if(iter % save_period == 0) {
 			char file_path[100];
 			sprintf(file_path, "%s/t=%lf.txt", folder_name, current_time);
@@ -103,52 +102,23 @@ void simulate_with_boundaries(Grid* grid, Particle** particles, int n_p,
 
 		// Step 1 (Kick): Compute intermediate momentum velocity (Eq. 14) and shifting velocity (Eq. 15)
 		// Step 2 (Drift): Shift the particles to their new positions (Eq. 16)
-		double time_drift = omp_get_wtime();
 		drift(particles,n_p,dt);
-		time_drift = omp_get_wtime() - time_drift;
-		printf("time_drift = %lf\n", time_drift);
-
 		// Todo after particles have moved
-		double time_nbh = omp_get_wtime();
 		update_cells(grid, particles, n_p);
 		update_neighborhoods(grid, particles, n_p, iter, setup->search);
-		time_nbh = omp_get_wtime() - time_nbh;
-		printf("time_nbh = %lf\n", time_nbh);
-
 		// Step 3: Compute density (Eq. 5) and pressure (Eq. 10)
-		double time_dpu = omp_get_wtime();
 		density_pressure_update(particles,n_p,kh,kernel);
-		time_dpu = omp_get_wtime() - time_dpu;
-		printf("time_dpu = %lf\n", time_dpu);
-
-
 		// Assign density, velocity and pressure to boundary particles
-		double time_bc = omp_get_wtime();
 		apply_BC_Adami_all(particles, n_p, setup->kernel, setup->kh);
-		time_bc = omp_get_wtime() - time_bc;
-		printf("time_bc = %lf\n", time_bc);
-
 		// Step 4: Compute inter-particle forces f_pres (Eq. 8), f_visc (Eq. 8), and f_bpres (Eq. 13)
-		double time_forces = omp_get_wtime();
 		inter_particle_forces_pres_all(particles,n_p,kh,kernel,eps);
-		time_forces = omp_get_wtime() - time_forces;
-		printf("time_forces = %lf\n", time_forces);
-		total_time_forces += time_forces;
-		printf("avg time forces = %lf\n", total_time_forces / (iter+1));
-
 		// Step 5 (Kick): Compute full time-step velocity (Eq. 17)
-		double time_kick = omp_get_wtime();
 		kick(particles, n_p, dt, kernel, kh);
-		time_kick = omp_get_wtime() - time_kick;
-		printf("time_kick = %lf\n", time_kick);
 
-		double time_anim = omp_get_wtime();
-		if (animation != NULL) display_particles(particles, animation, false, iter);
-		time_anim = omp_get_wtime() - time_anim;
-		printf("time_anim = %lf\n", time_anim);
+		if (animation != NULL) display_particles(particles, animation, false, false, current_time);
 
 		double time_total = omp_get_wtime() - start;
-		printf("Time for iteration = %lf s, frac nbh = %.2f\n", time_total, time_nbh / time_total);
+		printf("Time for iteration = %lf s\n", time_total);
 
 		// update_positions(grid, particles, particles_derivatives, residuals, n_p, setup, boundaries, index_part_in_domain);
 		current_time += setup->timestep;
@@ -159,10 +129,9 @@ void simulate_with_boundaries(Grid* grid, Particle** particles, int n_p,
 	printf("\n TOTAL = %lf", TOTAL);
 
 	if (animation != NULL)
-		display_particles(particles, animation, true, -1);
+		display_particles(particles, animation, true, false, current_time);
 
 }
-
 
 void drift(Particle** particles, int N, double dt) {
 	#pragma omp parallel

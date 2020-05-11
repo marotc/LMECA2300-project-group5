@@ -11,6 +11,7 @@ typedef struct Animation Animation;
 struct Animation {
 	bov_window_t* window;
 	bov_points_t* particles;
+	bov_points_t* box;
 	double timeout;
 	int N;
 	bov_points_t* grid;
@@ -30,7 +31,7 @@ void colormap_pressure(Particle *p, float color[3], double max_P);
 void colours_neighbors(GLfloat(*data)[8], Particle** particles, int index);
 void colormap_init_pos(Particle *p, float color[3]);
 
-void display_particles(Particle** particles, Animation* animation,bool end, int iter);
+void display_particles(Particle** particles, Animation* animation, bool end, bool take_screenshot, double t);
 
 
 
