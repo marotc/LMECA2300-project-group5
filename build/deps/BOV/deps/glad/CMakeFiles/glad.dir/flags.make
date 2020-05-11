@@ -6,5 +6,5 @@ C_FLAGS =
 
 C_DEFINES = 
 
-C_INCLUDES = -I/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/deps/BOV/deps/glad/include 
+C_INCLUDES = -I/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/deps/BOV/deps/glad/include 
 

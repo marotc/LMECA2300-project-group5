@@ -1,4 +1,4 @@
-# Install script for directory: /home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/deps/BOV
+# Install script for directory: /home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/deps/BOV
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -39,8 +39,8 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for each subdirectory.
-  include("/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/build/deps/BOV/deps/glfw/cmake_install.cmake")
-  include("/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/build/deps/BOV/deps/glad/cmake_install.cmake")
+  include("/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/build/deps/BOV/deps/glfw/cmake_install.cmake")
+  include("/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/build/deps/BOV/deps/glad/cmake_install.cmake")
 
 endif()
 

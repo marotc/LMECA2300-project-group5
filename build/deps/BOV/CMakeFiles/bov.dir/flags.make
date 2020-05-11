@@ -6,5 +6,5 @@ C_FLAGS =   -std=gnu99
 
 C_DEFINES = 
 
-C_INCLUDES = -I/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/deps/BOV/include -I/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/deps/BOV/src -I/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/build/deps/BOV/shaderIncludes -I/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/deps/BOV/deps/glad/include -I/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/deps/BOV/deps/glfw/include 
+C_INCLUDES = -I/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/deps/BOV/include -I/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/deps/BOV/src -I/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/build/deps/BOV/shaderIncludes -I/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/deps/BOV/deps/glad/include -I/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/deps/BOV/deps/glfw/include 
 

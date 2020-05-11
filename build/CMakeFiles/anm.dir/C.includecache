@@ -92,57 +92,57 @@ glad/glad.h
 GLFW/glfw3.h
 -
 
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/SPH.c
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/SPH.c
 SPH.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/SPH.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/SPH.h
 assert.h
 -
 time.h
 -
 
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/SPH.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/SPH.h
 particle.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/particle.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/particle.h
 print_particules.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/print_particules.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/print_particules.h
 kernel.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/kernel.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/kernel.h
 derivatives.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/derivatives.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/derivatives.h
 time.h
 -
 
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/derivatives.c
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/derivatives.c
 derivatives.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/derivatives.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/derivatives.h
 
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/derivatives.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/derivatives.h
 utils.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/utils.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/utils.h
 particle.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/particle.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/particle.h
 kernel.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/kernel.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/kernel.h
 
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/kernel.c
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/kernel.c
 kernel.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/kernel.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/kernel.h
 
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/kernel.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/kernel.h
 utils.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/utils.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/utils.h
 
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/main.c
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/main.c
 print_particules.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/print_particules.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/print_particules.h
 particle.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/particle.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/particle.h
 SPH.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/SPH.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/SPH.h
 derivatives.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/derivatives.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/derivatives.h
 kernel.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/kernel.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/kernel.h
 math.h
 -
 omp.h
@@ -150,13 +150,13 @@ omp.h
 sys/stat.h
 -
 
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/particle.c
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/particle.c
 particle.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/particle.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/particle.h
 assert.h
 -
 
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/particle.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/particle.h
 stdlib.h
 -
 math.h
@@ -168,27 +168,27 @@ stdbool.h
 omp.h
 -
 utils.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/utils.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/utils.h
 
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/print_particules.c
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/print_particules.c
 print_particules.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/print_particules.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/print_particules.h
 
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/print_particules.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/print_particules.h
 BOV.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/BOV.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/BOV.h
 math.h
 -
 particle.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/particle.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/particle.h
 utils.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/utils.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/utils.h
 
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/utils.c
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/utils.c
 utils.h
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/utils.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/utils.h
 
-/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/src/utils.h
+/home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/src/utils.h
 stdlib.h
 -
 stdio.h

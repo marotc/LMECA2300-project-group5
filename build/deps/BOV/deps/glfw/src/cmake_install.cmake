@@ -1,4 +1,4 @@
-# Install script for directory: /home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/project/deps/BOV/deps/glfw/src
+# Install script for directory: /home/mcouplet/syno/academia/ucl/q9-q10/anm-meca2300/LMECA2300-project-group5/deps/BOV/deps/glfw/src
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
