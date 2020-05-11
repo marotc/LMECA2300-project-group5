@@ -31,7 +31,7 @@ int main() {
 }
 
 void script_anim_from_data() {
-	bool take_screenshot = true;
+	bool take_screenshot = false;
 
 	int N_x_fluid = 50, N_y_fluid = 50, Re = 1000;
 	double h_p = 1.0/(N_x_fluid+1), U = 1, L_x = 1, L_y = 1;
@@ -72,8 +72,9 @@ void script_anim_from_data() {
 	char folder_name[100];
 	sprintf(folder_name, "../data/N=%d,Re=%d", N_x_fluid, (int)Re);
 
+	double t;
 	for(int i_save = 0; save_period*i_save*dt < T; i_save++) {
-		double t = save_period*i_save*dt;
+		t = save_period*i_save*dt;
 		char file_path[100];
 		sprintf(file_path, "%s/t=%lf.txt", folder_name, t);
 
