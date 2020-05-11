@@ -6,7 +6,10 @@
 
 #include <math.h>
 #include <omp.h>
-#include "crtdbg.h" // for memory leak detection; comment if you're on Linux
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+// #include "crtdbg.h" // for memory leak detection; comment if you're on Linux
 
 void script_lid_driven_cavity();
 
@@ -24,16 +27,14 @@ void free_tab(xy** tab, int n) {
 
 void script_lid_driven_cavity() {
 
-	// Test case taken from Adami et al., "A transport-velocity formulation for smoothed particle hydrodynamics" (2013)
-
 	// Parameters of the problem
 	double L_y = 1.0;
 	double L_x = 1.0;
-	double T = 10; // duration of simulation
+	double T = 120; // duration of simulation
 
 	// Physical parameters
-	double U = 1.0;
-	double Re = 100;
+	double U = 1;
+	double Re = 1000;
 	double rho_0 = 1.0; // reference density
 	double nu = U * L_x / Re; // kinematic viscosity
 	double c_0 = 10 * U; // speed of sound
@@ -45,6 +46,7 @@ void script_lid_driven_cavity() {
 	xy* gravity = xy_new(0.0, 0.0);
 	double eps = 1e-6; // TODO: no idea what I should put here
 
+
 	// SPH parameters
 	Search *search = Search_new(false, 0, 0, 0);
 	Kernel kernel = Cubic; // kernel choice
@@ -53,7 +55,7 @@ void script_lid_driven_cavity() {
 
 	// -------- NUMBER OF PARTICLES AND SIZE --------
 
-	int N_x_fluid = 100, N_y_fluid = 100;
+	int N_x_fluid = 50, N_y_fluid = 50;
 	double h_x = L_x / (N_x_fluid + 1), h_y = L_y / (N_y_fluid + 1);
 	int dN = 5; // number of ghost particle rows (>= 1)
 	int N_x = N_x_fluid + 2 * dN, N_y = N_y_fluid + 2 * dN;
@@ -72,7 +74,8 @@ void script_lid_driven_cavity() {
 			xy *v = xy_new(0, 0); // initial velocity
 			xy *v_imp = NULL;
 			if (on_boundary)
-				v_imp = xy_new(U * (pos->y >= L_y || pos->y <= 0), 0); // imposed velocity
+				v_imp = xy_new(U * (pos->y <= 0), 0); // 1 moving lid
+                // v_imp = xy_new(U * (pos->y >= L_y || pos->y <= 0), 0); // 2 moving lids
 			xy* gravity_p = xy_new(gravity->x, gravity->y);
 			particles[k] = Particle_new(k, m, pos, v, v_imp, rho_0, nu, c_0, gamma, 0.0, chi, gravity_p, on_boundary);
 			k++;
@@ -86,6 +89,10 @@ void script_lid_driven_cavity() {
 	free(gravity);
 	int n_iter = (int)(T / dt);
 
+	// printf("dt_CFL = %lf, dt_visc = %lf\n", 0.25*h_p/(c_0+U), 0.25*h_p*h_p / nu);
+	//
+	// printf("%lf\n", dt);
+	// exit(0);
 
 	// Animation parameter
 	double T_anim = 1.0; // duration of animation
@@ -98,7 +105,7 @@ void script_lid_driven_cavity() {
 	double y2 = L_y + (dN - 1) * h_y;
 	Grid *grid = Grid_new(x1, x2, y1, y2, kh);
 	// Setup animation
-	Animation *animation = Animation_new(N_tot, dt_anim, grid, 1); // grid == NULL to not plot grid, and only plot bulk particles
+	Animation *animation = Animation_new(N_tot, dt_anim, NULL, h_x/3); // grid == NULL to not plot grid, and only plot bulk particles
 	// Setup setup
 	Setup *setup = Setup_new(n_iter, dt, kh, search, kernel, surface_detection, 0.0, XSPH_epsilon);
 
@@ -106,9 +113,13 @@ void script_lid_driven_cavity() {
 	printf(">>>>> kh = %2.6f <<<<<< \n", kh);
 	printf(">>>>> N_part_domain: %d, N_part_boundaries: %d, N_part_total: %d <<<<<< \n", N_x_fluid * N_y_fluid, N_tot - N_x_fluid * N_y_fluid, N_tot);
 
-	omp_set_num_threads(4);//set the number of threads
-	simulate_with_boundaries(grid, particles, N_tot, setup, animation, eps);
-	
+	char folder_name[100];
+	sprintf(folder_name, "../data/N=%d,Re=%d", N_x_fluid, (int)Re);
+	mkdir(folder_name, 0777);
+
+	omp_set_num_threads(2);//set the number of threads
+	simulate_with_boundaries(grid, particles, N_tot, setup, animation, eps, folder_name);
+
 	// Free stuff
 	free_particles(particles, N_tot);
 	Grid_free(grid);

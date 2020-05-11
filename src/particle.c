@@ -10,6 +10,7 @@ Particle* Particle_new(int index, double m, xy* pos, xy* v, xy *v_imp, double rh
 	particle->index = index;
 	particle->m = m;
 	particle->pos = pos;
+	particle->init_pos = xy_new(pos->x, pos->y); // copy initial position
 	particle->rho = rho_0;
 	particle->v = v;
 	particle->v_imp = v_imp; // imposed velocity (NULL if not on boundary)
@@ -253,6 +254,7 @@ void update_neighborhoods_particles(Grid* grid, Particle** particles, int N, Sea
 	{
 		int start, end;
 		split_thread(N, &start, &end);
+		// #pragma omp nowait
 		for (int i = start; i <= end; i++) {
 			add_neighbors_from_cells(grid, particles[i]);
 			if (search->verlet) {

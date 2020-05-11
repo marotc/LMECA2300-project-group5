@@ -30,6 +30,7 @@ void fillData(GLfloat(*data)[8], Particle** particles, int N) {
 // 		colormap_Cs(p, &data[i][4]); // fill color
 // 		colormap_pressure(p, &data[i][4], max_pressure);
 		colormap_velocity(p, &data[i][4], max_norm_vel);
+		colormap_init_pos(p, &data[i][4]);
 // 		if (p->on_free_surface) {
 // 		  colormap_uni_color_2(&data[i][4]);
 // // 		  colormap_fs(p, &data[i][4], max_norm_fs);
@@ -71,7 +72,7 @@ bov_points_t * load_Grid(Grid* grid,double scale)
 	return points;
 }
 
-Animation* Animation_new(int N, double timeout,Grid* grid,double scale)
+Animation* Animation_new(int N, double timeout,Grid* grid, double particle_width)
 {
 	Animation* animation = (Animation*)malloc(sizeof(Animation));
 	animation->window = bov_window_new(1024, 780, "ANM Project: SPH");
@@ -86,7 +87,7 @@ Animation* Animation_new(int N, double timeout,Grid* grid,double scale)
 	bov_points_t *particles = bov_particles_new(data, N, GL_STATIC_DRAW);
 	free(data);
 	// setting particles appearance
-	bov_points_set_width(particles, 0.006);
+	bov_points_set_width(particles, particle_width);
 	// bov_points_set_outline_width(particles, 0.0025);
 
 	double c = 4;
@@ -95,7 +96,7 @@ Animation* Animation_new(int N, double timeout,Grid* grid,double scale)
 	animation->particles = particles;
 	////set-up grid////
 	if (grid != NULL)
-		animation->grid = load_Grid(grid,scale*c);
+		animation->grid = load_Grid(grid, c);
 	else
 		animation->grid = NULL;
 	return animation;
@@ -131,7 +132,7 @@ void display_particles(Particle** particles, Animation* animation,bool end, int 
 			if(animation->grid != NULL)
 				bov_lines_draw(window,animation->grid,0, BOV_TILL_END);
 			bov_particles_draw(window, animation->particles, 0, BOV_TILL_END);
-// 			if (iter%10 == 0) bov_window_screenshot(window, screenshot_name);
+			if (iter%10 == 0) bov_window_screenshot(window, screenshot_name);
 			bov_window_update(window);
 		}
 	}
@@ -195,12 +196,15 @@ void colormap_fs(Particle *p, float color[3], double max_norm) {
 	color[2] = 0.0;//20*squared(fs->y/max_norm);
 }
 
-void colormap_velocity(Particle *p, float color[3], double max_norm) {
-	double x = norm(p->v);
-
+void colormap_jet(double x, float color[3]) {
 	color[0] = fmin(4*x - 1.5, -4*x + 4.5);
 	color[1] = fmin(4*x - 0.5, -4*x + 3.5);
 	color[2] = fmin(4*x + 0.5, -4*x + 2.5);
+}
+
+void colormap_velocity(Particle *p, float color[3], double max_norm) {
+	double x = norm(p->v);
+	colormap_jet(x, color);
 }
 
 void colormap_pressure(Particle *p, float color[3], double max_P) {
@@ -223,4 +227,8 @@ void colours_neighbors(GLfloat(*data)[8], Particle** particles, int index)
 		data[i][4] = 0;data[i][5] = 20;data[i][6] = 20;
 		node = node->next;
 	}
+}
+
+void colormap_init_pos(Particle *p, float color[3]) {
+	colormap_jet(p->init_pos->y, color);
 }

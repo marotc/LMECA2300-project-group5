@@ -48,6 +48,7 @@ struct Particle {
 	int index;
 	double m;     // mass
 	xy* pos;      // position
+	xy *init_pos; // initial position (for color)
 	xy* v;        // velocity
 	xy *v_imp;	  // imposed velocity
 	double rho;   // density

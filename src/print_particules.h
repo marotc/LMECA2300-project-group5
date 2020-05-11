@@ -28,6 +28,7 @@ void colormap_fs(Particle *p, float color[3], double max_norm);
 void colormap_velocity(Particle *p, float color[3], double max_norm);
 void colormap_pressure(Particle *p, float color[3], double max_P);
 void colours_neighbors(GLfloat(*data)[8], Particle** particles, int index);
+void colormap_init_pos(Particle *p, float color[3]);
 
 void display_particles(Particle** particles, Animation* animation,bool end, int iter);
 

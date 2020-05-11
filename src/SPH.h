@@ -42,7 +42,7 @@ Residual* Residual_new();
 void free_Residuals(Residual** residuals,int N);
 
 void simulate_with_boundaries(Grid* grid, Particle** particles, int n_p,
-	Setup* setup, Animation* animation, double eps);
+	Setup* setup, Animation* animation, double eps, char * folder_name);
 
 void drift(Particle** particles, int N, double dt);
 void density_pressure_update(Particle** particles, int N, double kh, Kernel kernel);

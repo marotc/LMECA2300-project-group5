@@ -34,46 +34,118 @@ void free_Residuals(Residual** residuals, int N) {
 }
 
 void simulate_with_boundaries(Grid* grid, Particle** particles, int n_p,
-	Setup* setup, Animation* animation, double eps) {
+	Setup* setup, Animation* animation, double eps, char * folder_name) {
 
 	double current_time = 0.0;
 	double dt = setup->timestep;
 	double kh = setup->kh;
 	Kernel kernel = setup->kernel;
 
-	int dummy;
+	double total_time_forces = 0;
+
+	// setup->itermax = 100;
+
+	int phase = 0;
+
+	double dt_save = 0.01; // max time between each save
+	int save_period = (int) (dt_save / dt);
+
+	double dt_phase = 30; // time between phase transition
+
 	double START = omp_get_wtime();
 	for (int iter = 0; iter < setup->itermax; iter++) {
 		printf("----------------------------------------------------- \n");
 		printf("iter %d / %d @ t = %lf \n", iter, setup->itermax, current_time);
 
-		double start = omp_get_wtime();
+		if(phase == 0 && current_time >= dt_phase) {
+			// enable upper lid
+			phase++;
+			for(int i = 0; i < n_p; i++) {
+				Particle *pi = particles[i];
+				if(pi->on_boundary && pi->pos->y >= 1) {
+					pi->v_imp->x = 1;
+				}
+			}
+		}
+		if(phase == 1 && current_time >= 2*dt_phase) {
+			// disable lower lid
+			phase++;
+			for(int i = 0; i < n_p; i++) {
+				Particle *pi = particles[i];
+				if(pi->on_boundary && pi->pos->y <= 0) {
+					pi->v_imp->x = 0;
+				}
+			}
+		}
+		if(phase == 2 && current_time >= 3*dt_phase) {
+			// disable upper lid
+			phase++;
+			for(int i = 0; i < n_p; i++) {
+				Particle *pi = particles[i];
+				if(pi->on_boundary && pi->pos->y >= 1) {
+					pi->v_imp->x = 0;
+				}
+			}
+		}
 
+
+		if(iter % save_period == 0) {
+			char file_path[100];
+			sprintf(file_path, "%s/t=%lf.txt", folder_name, current_time);
+			FILE *f = fopen(file_path, "w");
+			for(int i = 0; i < n_p; i++) {
+				Particle *pi = particles[i];
+				fprintf(f, "%d %lf %lf %lf %lf %lf %lf\n", pi->index, pi->pos->x, pi->pos->y, pi->init_pos->x, pi->init_pos->y, pi->v->x, pi->v->y);
+			}
+		}
+
+		double start = omp_get_wtime();
 
 		// Step 1 (Kick): Compute intermediate momentum velocity (Eq. 14) and shifting velocity (Eq. 15)
 		// Step 2 (Drift): Shift the particles to their new positions (Eq. 16)
+		double time_drift = omp_get_wtime();
 		drift(particles,n_p,dt);
+		time_drift = omp_get_wtime() - time_drift;
+		printf("time_drift = %lf\n", time_drift);
 
 		// Todo after particles have moved
-		double start_nbh = omp_get_wtime();
+		double time_nbh = omp_get_wtime();
 		update_cells(grid, particles, n_p);
-		update_neighborhoods(grid, particles, n_p, iter, setup->search); 
-		double time_nbh = omp_get_wtime() - start_nbh;
-		printf("%lf\n", time_nbh);
+		update_neighborhoods(grid, particles, n_p, iter, setup->search);
+		time_nbh = omp_get_wtime() - time_nbh;
+		printf("time_nbh = %lf\n", time_nbh);
 
 		// Step 3: Compute density (Eq. 5) and pressure (Eq. 10)
+		double time_dpu = omp_get_wtime();
 		density_pressure_update(particles,n_p,kh,kernel);
+		time_dpu = omp_get_wtime() - time_dpu;
+		printf("time_dpu = %lf\n", time_dpu);
+
 
 		// Assign density, velocity and pressure to boundary particles
+		double time_bc = omp_get_wtime();
 		apply_BC_Adami_all(particles, n_p, setup->kernel, setup->kh);
+		time_bc = omp_get_wtime() - time_bc;
+		printf("time_bc = %lf\n", time_bc);
 
 		// Step 4: Compute inter-particle forces f_pres (Eq. 8), f_visc (Eq. 8), and f_bpres (Eq. 13)
+		double time_forces = omp_get_wtime();
 		inter_particle_forces_pres_all(particles,n_p,kh,kernel,eps);
+		time_forces = omp_get_wtime() - time_forces;
+		printf("time_forces = %lf\n", time_forces);
+		total_time_forces += time_forces;
+		printf("avg time forces = %lf\n", total_time_forces / (iter+1));
 
 		// Step 5 (Kick): Compute full time-step velocity (Eq. 17)
+		double time_kick = omp_get_wtime();
 		kick(particles, n_p, dt, kernel, kh);
+		time_kick = omp_get_wtime() - time_kick;
+		printf("time_kick = %lf\n", time_kick);
 
+		double time_anim = omp_get_wtime();
 		if (animation != NULL) display_particles(particles, animation, false, iter);
+		time_anim = omp_get_wtime() - time_anim;
+		printf("time_anim = %lf\n", time_anim);
 
 		double time_total = omp_get_wtime() - start;
 		printf("Time for iteration = %lf s, frac nbh = %.2f\n", time_total, time_nbh / time_total);
@@ -88,6 +160,7 @@ void simulate_with_boundaries(Grid* grid, Particle** particles, int n_p,
 
 	if (animation != NULL)
 		display_particles(particles, animation, true, -1);
+
 }
 
 
@@ -208,10 +281,16 @@ void apply_BC_Adami(Particle* pi, Kernel kernel, double kh) {
 void inter_particle_forces_pres_all(Particle** particles, int N, double kh, Kernel kernel, double eps) {
 	#pragma omp parallel
 	{
-		int start, end;
-		split_thread(N, &start, &end);
-		for (int i = start; i <= end; i++)
+		// double time = omp_get_wtime();
+		// int start, end;
+		// split_thread(N, &start, &end);
+		// for (int i = start; i <= end; i++)
+		#pragma omp for schedule(dynamic, 1) nowait
+		// #pragma omp for
+		for(int i = 0; i < N; i++)
 			inter_particle_forces_pres(particles[i], kh, kernel, eps);
+		// time = omp_get_wtime() - time;
+		// printf("Time for thread %d: %lf\n", omp_get_thread_num(), time);
 	}
 }
 
@@ -252,7 +331,7 @@ void inter_particle_forces_pres(Particle* pi, double kh, Kernel kernel, double e
 			eta_ij = 2 * etai * etaj / (etai + etaj);
 			F_ij = DWij->x * (pi->pos->x - pj->pos->x) + DWij->y * (pi->pos->y - pj->pos->y);
 			tmp = (1.0 / pi->m) * Vi2Vj2 * eta_ij * F_ij / (r2ij + eps);
-			// if(r2ij == 0) assert(pi == pj);
+			if(r2ij == 0) assert(pi == pj);
 			pi->a->x += tmp * (pi->v->x - pj->v->x);
 			pi->a->y += tmp * (pi->v->y - pj->v->y);
 
