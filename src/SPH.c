@@ -88,6 +88,7 @@ void simulate_with_boundaries(Grid* grid, Particle** particles, int n_p,
 			}
 		}
 
+		/*
 		if(iter % save_period == 0) {
 			char file_path[100];
 			sprintf(file_path, "%s/t=%lf.txt", folder_name, current_time);
@@ -97,6 +98,7 @@ void simulate_with_boundaries(Grid* grid, Particle** particles, int n_p,
 				fprintf(f, "%d %lf %lf %lf %lf %lf %lf\n", pi->index, pi->pos->x, pi->pos->y, pi->init_pos->x, pi->init_pos->y, pi->v->x, pi->v->y);
 			}
 		}
+		*/
 
 		double start = omp_get_wtime();
 
