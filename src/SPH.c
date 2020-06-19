@@ -136,60 +136,49 @@ void simulate_with_boundaries(Grid* grid, Particle** particles, int n_p,
 }
 
 void drift(Particle** particles, int N, double dt) {
-	#pragma omp parallel
-	{
-		int start, end;
-		split_thread(N, &start, &end);
-		for (int i = start; i <= end; i++) {
-			Particle *pi = particles[i];
-			if (!pi->on_boundary) { // if bulk particle
-				// Eq. 14
-				pi->v->x += (dt / 2) * pi->a->x;
-				pi->v->y += (dt / 2) * pi->a->y;
-				// Eq. 15
-				pi->vs->x = pi->v->x + (dt / 2) * pi->as->x;
-				pi->vs->y = pi->v->y + (dt / 2) * pi->as->y;
-				// Eq. 16
-				pi->pos->x += dt * pi->vs->x;
-				pi->pos->y += dt * pi->vs->y;
-			}
+	#pragma omp parallel for
+	for (int i = 0; i < N; i++) {
+		Particle *pi = particles[i];
+		if (!pi->on_boundary) { // if bulk particle
+			// Eq. 14
+			pi->v->x += (dt / 2) * pi->a->x;
+			pi->v->y += (dt / 2) * pi->a->y;
+			// Eq. 15
+			pi->vs->x = pi->v->x + (dt / 2) * pi->as->x;
+			pi->vs->y = pi->v->y + (dt / 2) * pi->as->y;
+			// Eq. 16
+			pi->pos->x += dt * pi->vs->x;
+			pi->pos->y += dt * pi->vs->y;
 		}
 	}
 }
 
 void density_pressure_update(Particle** particles, int N, double kh, Kernel kernel) {
-	#pragma omp parallel
-	{
-		int start, end;
-		split_thread(N, &start, &end);
-		for (int i = start; i <= end; i++) {
-			Particle *pi = particles[i];
-			if (!pi->on_boundary) { // only for fluid particles
-				pi->rho = pi->V = 0;
-				ListNode *node = pi->neighborhood->head;
-				while (node != NULL) {
-					Particle *pj = node->v;
-					double Wij = eval_kernel(pi->pos, pj->pos, kh, kernel);
-					// PySPH's SummationDensity
-					pi->rho += pi->m * Wij;
-					pi->V += Wij; // inverse of particle volume
-					node = node->next;
-				}
-				// PySPH's StateEquation
-				pi->P = squared(pi->param->sound_speed) * (pi->rho - pi->param->rho_0);
-				// printf("(%lf, %lf): m = %lf, rho = %lf, V = %lf, p = %lf\n", pi->pos->x, pi->pos->y, pi->m, pi->rho, pi->V, pi->P);
+	#pragma omp parallel for
+	for (int i = 0; i < N; i++) {
+		Particle *pi = particles[i];
+		if (!pi->on_boundary) { // only for fluid particles
+			pi->rho = pi->V = 0;
+			ListNode *node = pi->neighborhood->head;
+			while (node != NULL) {
+				Particle *pj = node->v;
+				double Wij = eval_kernel(pi->pos, pj->pos, kh, kernel);
+				// PySPH's SummationDensity
+				pi->rho += pi->m * Wij;
+				pi->V += Wij; // inverse of particle volume
+				node = node->next;
 			}
+			// PySPH's StateEquation
+			pi->P = squared(pi->param->sound_speed) * (pi->rho - pi->param->rho_0);
+			// printf("(%lf, %lf): m = %lf, rho = %lf, V = %lf, p = %lf\n", pi->pos->x, pi->pos->y, pi->m, pi->rho, pi->V, pi->P);
 		}
 	}
 }
 
 void apply_BC_Adami_all(Particle **particles, int N, Kernel kernel, double kh) {
-	#pragma omp parallel
-	{
-		int start, end;
-		split_thread(N, &start, &end);
-		for (int i = start; i <= end; i++)
-			apply_BC_Adami(particles[i], kernel, kh);
+	#pragma omp parallel for
+	for (int i = 0; i < N; i++) {
+		apply_BC_Adami(particles[i], kernel, kh);
 	}
 }
 
@@ -250,19 +239,9 @@ void apply_BC_Adami(Particle* pi, Kernel kernel, double kh) {
 }
 
 void inter_particle_forces_pres_all(Particle** particles, int N, double kh, Kernel kernel, double eps) {
-	#pragma omp parallel
-	{
-		// double time = omp_get_wtime();
-		// int start, end;
-		// split_thread(N, &start, &end);
-		// for (int i = start; i <= end; i++)
-		#pragma omp for schedule(dynamic, 1) nowait
-		// #pragma omp for
-		for(int i = 0; i < N; i++)
-			inter_particle_forces_pres(particles[i], kh, kernel, eps);
-		// time = omp_get_wtime() - time;
-		// printf("Time for thread %d: %lf\n", omp_get_thread_num(), time);
-	}
+	#pragma omp parallel for schedule(dynamic, 1)
+	for(int i = 0; i < N; i++)
+		inter_particle_forces_pres(particles[i], kh, kernel, eps);
 }
 
 void inter_particle_forces_pres(Particle* pi, double kh, Kernel kernel, double eps) {
@@ -327,16 +306,12 @@ void inter_particle_forces_pres(Particle* pi, double kh, Kernel kernel, double e
 }
 
 void kick(Particle **particles, int N, double dt, Kernel kernel, double kh) {
-	#pragma omp parallel
-	{
-		int start, end;
-		split_thread(N, &start, &end);
-		for (int i = start; i <= end; i++) {
-			Particle *pi = particles[i];
-			if (!pi->on_boundary) {
-				pi->v->x += (dt / 2) * pi->a->x;
-				pi->v->y += (dt / 2) * pi->a->y;
-			}
+	#pragma omp parallel for
+	for (int i = 0; i < N; i++) {
+		Particle *pi = particles[i];
+		if (!pi->on_boundary) {
+			pi->v->x += (dt / 2) * pi->a->x;
+			pi->v->y += (dt / 2) * pi->a->y;
 		}
 	}
 }

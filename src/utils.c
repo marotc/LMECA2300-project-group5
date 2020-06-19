@@ -56,18 +56,6 @@ double norm(xy *v) {
 	return hypot(v->x, v->y);
 }
 
-//split the element of an array between the threads
-void split_thread(int N, int* start, int* end) {
-	int numThreads = omp_get_num_threads();
-	int index = omp_get_thread_num();
-	int n_par_per_thread = N / numThreads;
-	*start = index * n_par_per_thread;
-	if (index == numThreads - 1)
-		*end = N - 1;
-	else
-		*end = *start + n_par_per_thread - 1;
-}
-
 xy* map_to_circle(xy* pos_square) {
     double pos_x_save = pos_square->x;
     double pos_y_save = pos_square->y;

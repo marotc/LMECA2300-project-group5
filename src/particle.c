@@ -208,19 +208,15 @@ void reset_grid(Grid* grid) {
 
 // Empty neighborhood of each particle
 void reset_particles(Particle** particles, int N, int iter, Search* search) {
-	#pragma omp parallel
-	{
-		int start, end;
-		split_thread(N, &start, &end);
-		for (int i = start; i <= end; i++) {
-			Particle* p = particles[i];
-			List_free(p->neighborhood, NULL);
-			p->neighborhood = List_new();
-			// If in Verlet mode, empty potential nbh
-			if (search->verlet && iter%search->T == 0) {
-				List_free(p->potential_neighborhood, NULL);
-				p->potential_neighborhood = List_new();
-			}
+	#pragma omp parallel for
+	for (int i = 0; i < N; i++) {
+		Particle* p = particles[i];
+		List_free(p->neighborhood, NULL);
+		p->neighborhood = List_new();
+		// If in Verlet mode, empty potential nbh
+		if (search->verlet && iter%search->T == 0) {
+			List_free(p->potential_neighborhood, NULL);
+			p->potential_neighborhood = List_new();
 		}
 	}
 }
@@ -250,18 +246,13 @@ void add_neighbors_from_cells(Grid* grid, Particle* p) {
 }
 
 void update_neighborhoods_particles(Grid* grid, Particle** particles, int N, Search* search) {
-	#pragma omp parallel
-	{
-		int start, end;
-		split_thread(N, &start, &end);
-		// #pragma omp nowait
-		for (int i = start; i <= end; i++) {
-			add_neighbors_from_cells(grid, particles[i]);
-			if (search->verlet) {
-				List* l = particles[i]->potential_neighborhood;
-				particles[i]->potential_neighborhood = particles[i]->neighborhood;
-				particles[i]->neighborhood = l;
-			}
+	#pragma omp parallel for
+	for (int i = 0; i < N; i++) {
+		add_neighbors_from_cells(grid, particles[i]);
+		if (search->verlet) {
+			List* l = particles[i]->potential_neighborhood;
+			particles[i]->potential_neighborhood = particles[i]->neighborhood;
+			particles[i]->neighborhood = l;
 		}
 	}
 }
@@ -269,19 +260,15 @@ void update_neighborhoods_particles(Grid* grid, Particle** particles, int N, Sea
 
 // Among potential neighbors, filter the valid ones
 void update_from_potential_neighbors(Particle** particles, int N, Search* search) {
-	#pragma omp parallel
-	{
-		int start, end;
-		split_thread(N, &start, &end);
-		for (int i = start; i <= end; i++) {
-			Particle* p = particles[i];
-			ListNode *node = p->potential_neighborhood->head;
-			while (node != NULL) {
-				Particle* q = (Particle*)node->v;
-				if (check_distance(p->pos, q->pos, search->kh))
-					List_append(p->neighborhood, q);
-				node = node->next;
-			}
+	#pragma omp parallel for
+	for (int i = 0; i < N; i++) {
+		Particle* p = particles[i];
+		ListNode *node = p->potential_neighborhood->head;
+		while (node != NULL) {
+			Particle* q = (Particle*)node->v;
+			if (check_distance(p->pos, q->pos, search->kh))
+				List_append(p->neighborhood, q);
+			node = node->next;
 		}
 	}
 }
